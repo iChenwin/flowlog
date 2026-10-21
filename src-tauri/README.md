@@ -28,6 +28,16 @@ the corresponding note after preserving any newer text. Recovery copies contain
 private local note data. Page titles decode percent-encoded filenames; journal
 titles display ISO dates while original file paths stay unchanged.
 
+The selected vault folder is remembered outside the notes in
+`dirs::config_dir()/FlowLog/last-vault.txt` (the user's roaming application-data
+folder on Windows). Configuration updates use a flushed, synced temporary file
+and atomic replacement after the chosen vault has successfully opened. Startup
+reopens this selection; on the first run it creates `Documents/FlowLog`. If a
+remembered folder was removed or disconnected, startup reports its path and asks
+the user to choose a folder again, without recreating the missing folder or
+silently switching to the default. Choosing another folder replaces the saved
+selection only after preparation and listing succeed.
+
 The global application mutex serializes internal operations. Revision hashes are
 checked twice before replacement. This detects normal external editor changes;
 it is not an operating-system lock against arbitrary external applications. An

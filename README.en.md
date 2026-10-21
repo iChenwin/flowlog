@@ -10,7 +10,7 @@ A small local outliner for everyday journals, inspired by Logseq's flowing journ
 
 - Today-first journal stream with earlier entries and date navigation.
 - Outline editing, indentation, subtree movement, folding, undo and redo.
-- TODO / DOING / DONE tasks and task overview.
+- TODO / DOING / DONE tasks and task overview for outline Markdown.
 - Page links, tags, suggestions, backlinks and text search.
 - Basic bold, inline code and URL rendering; source editing for complex Markdown.
 - Local UTF-8 Markdown on desktop, autosave, revision checks, pre-save snapshots and draft/error feedback.
@@ -26,7 +26,7 @@ FlowLog uses Tauri 2, React, TypeScript and Rust, without Electron. It requires 
 
 Write in today's journal, press Enter for another block and Tab to indent. Use Ctrl + Enter for tasks, `[[Page]]` for connections and Ctrl + K to search. The bottom-left vault control opens a different folder and shows the data location. No account is required.
 
-The default vault is `FlowLog` in the system Documents folder. Notes use `journals/YYYY_MM_DD.md` and `pages/*.md`. Previous contents are kept in `.flowlog/backups`; conflicting drafts may be stored in `.flowlog/conflicts`. Backups do not currently rotate automatically. Manage storage and keep independent backups.
+The first default vault is `FlowLog` in the system Documents folder. Later launches reopen the last selected folder. Notes use `journals/YYYY_MM_DD.md` and `pages/*.md`. Previous contents are kept in `.flowlog/backups`, with the latest 20 snapshots per note; conflicting drafts in `.flowlog/conflicts` are retained. See [storage recovery](src-tauri/README.md) and keep independent backups.
 
 ## Compatibility and limitations
 
@@ -50,6 +50,7 @@ npm run tauri dev
 ```sh
 npm test
 npm run build
+npm run test:e2e
 cargo test --manifest-path src-tauri/Cargo.toml
 npx tauri build
 ```

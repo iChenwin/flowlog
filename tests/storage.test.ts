@@ -72,3 +72,46 @@ describe('serial automatic saving', () => {
     expect(commands.indexOf('save_note')).toBeLessThan(commands.indexOf('choose_vault'));
   });
 });
+
+describe('crash draft recovery', () => {
+  it('recovers a new page which never reached disk', async () => {
+    const fresh: Note = { path: 'pages/new.md', title: 'new', kind: 'page', content: '- 尚未落盘的新页\n', revision: '' };
+    localStorage.setItem('flowlog.draft:D:/Notes:' + fresh.path, JSON.stringify(fresh));
+    const storage = await import('../src/storage');
+    const vault = await storage.openVault();
+    expect(vault.notes.some(n => n.path === fresh.path)).toBe(true);
+    expect(storage.recoveredDraft(fresh)).toBe(fresh.content);
+    await storage.flushAll();
+    expect(bridge.invoke).toHaveBeenCalledWith('save_note', expect.objectContaining({ path: fresh.path, expectedRevision: '' }));
+  });
+  it('keeps the original revision across repeated recovery of a conflicting draft', async () => {
+    const draft = { ...note, revision: 'older', content: '- 旧基线的草稿\n' };
+    localStorage.setItem('flowlog.draft:D:/Notes:' + note.path, JSON.stringify(draft));
+    let storage = await import('../src/storage');
+    await storage.openVault();
+    await expect(storage.flushAll()).rejects.toThrow();
+    storage.scheduleSave({ ...draft, content: '- 冲突后继续编辑\n' });
+    expect(JSON.parse(localStorage.getItem('flowlog.draft:D:/Notes:' + note.path)!).revision).toBe('older');
+    vi.clearAllTimers(); vi.resetModules(); storage = await import('../src/storage');
+    await storage.openVault();
+    await expect(storage.flushAll()).rejects.toThrow();
+    expect(bridge.invoke.mock.calls.filter(call => call[0] === 'save_note')).toHaveLength(0);
+    expect(storage.recoveredDraft(note)).toBe('- 冲突后继续编辑\n');
+  });
+  it('treats a deleted disk note with an old draft as a conflict', async () => {
+    bridge.invoke.mockResolvedValue({ root: 'D:/Notes', notes: [] });
+    localStorage.setItem('flowlog.draft:D:/Notes:' + note.path, JSON.stringify(note));
+    const storage = await import('../src/storage'); await storage.openVault();
+    await expect(storage.flushAll()).rejects.toThrow();
+    expect(bridge.invoke.mock.calls.filter(call => call[0] === 'save_note')).toHaveLength(0);
+  });
+  it('discards explicitly and reloads the current selected vault rather than the default', async () => {
+    const storage = await import('../src/storage'); await storage.openVault();
+    bridge.invoke.mockRejectedValueOnce(new Error('CONFLICT: external edit'));
+    storage.scheduleSave({ ...note, content: '- 草稿\n' });
+    await expect(storage.flushAll()).rejects.toThrow();
+    await storage.discardDraftsAndReload();
+    expect(bridge.invoke.mock.calls.at(-1)?.[0]).toBe('list_vault');
+    expect(storage.recoveredDraft(note)).toBeNull();
+  });
+});

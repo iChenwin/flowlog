@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod vault;
+mod settings;
 
 use std::{path::PathBuf, sync::Mutex};
 use tauri::State;
@@ -11,10 +12,15 @@ struct AppState(Mutex<Option<PathBuf>>);
 
 #[tauri::command]
 fn open_default_vault(state: State<AppState>) -> Result<Vault, String> {
-    let root = dirs::document_dir().ok_or("Cannot locate your Documents folder")?.join("FlowLog");
+    let config = settings::config_directory()?;
+    let root = match settings::remembered_vault(&config)? {
+        Some(root) => root,
+        None => dirs::document_dir().ok_or("Cannot locate your Documents folder")?.join("FlowLog"),
+    };
     let mut active = state.0.lock().map_err(|_| "Vault lock unavailable")?;
     let root = vault::prepare(&root)?;
     let result = vault::list(&root)?;
+    settings::remember_vault(&settings::config_directory()?, &root)?;
     *active = Some(root);
     Ok(result)
 }
@@ -27,6 +33,7 @@ fn choose_vault(state: State<AppState>) -> Result<Option<Vault>, String> {
     let mut active = state.0.lock().map_err(|_| "Vault lock unavailable")?;
     let root = vault::prepare(&root)?;
     let result = vault::list(&root)?;
+    settings::remember_vault(&settings::config_directory()?, &root)?;
     *active = Some(root);
     Ok(Some(result))
 }

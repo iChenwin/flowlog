@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ArrowDown, ArrowUpRight, BookOpen, CalendarDays, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, Circle, Command, Download, FileText, FolderOpen, HelpCircle, ListTodo, LoaderCircle, Menu, Moon, PanelRight, Plus, Search, Sun, Upload, X, AlertCircle } from 'lucide-react';
 import type { Block, Note, Vault } from './types';
 import { extractLinks, indentBlock, isOutlineMarkdown, journalDate, journalPath, mergeBlock, moveBlock, newBlock, pagePath, parseMarkdown, serializeMarkdown, splitBlock, toggleTask, visibleBlocks } from './core';
@@ -17,10 +17,32 @@ function Editor({ note, onChange, open, titles }: EditorProps) {
   const [completion, setCompletion] = useState<{ id: string; start: number; end: number; type: string; query: string } | null>(null);
   const lastContent = useRef(note.content);
   const fields = useRef(new Map<string, HTMLTextAreaElement>());
+  const pendingFocus = useRef<{ id: string; position?: number } | null>(null);
   const composing = useRef(false);
-  useEffect(() => { if (note.content !== lastContent.current) { lastContent.current = note.content; setBlocks(parseMarkdown(note.content)); } }, [note.content]);
+  useLayoutEffect(() => {
+    const target = pendingFocus.current; if (!target) return;
+    const field = fields.current.get(target.id); if (!field) return;
+    field.focus(); const offset = target.position ?? field.value.length;
+    field.setSelectionRange(offset, offset); pendingFocus.current = null;
+  }, [blocks, active]);
+  useEffect(() => {
+    if (note.content !== lastContent.current) {
+      const oldIndex = blocks.findIndex(block => block.id === active);
+      const oldField = active ? fields.current.get(active) : undefined;
+      const position = oldField?.selectionStart;
+      const hadFocus = oldField === document.activeElement;
+      const next = parseMarkdown(note.content);
+      lastContent.current = note.content; setBlocks(next);
+      if (hadFocus && oldIndex >= 0) focus(next[Math.min(oldIndex, next.length - 1)], position);
+    }
+  }, [note.content]);
   function commit(next: Block[]) { setBlocks(next); const content = serializeMarkdown(next, note.content); lastContent.current = content; onChange(note, content); }
-  function focus(block: Block | undefined, position?: number) { if (!block) return; setActive(block.id); requestAnimationFrame(() => { const field = fields.current.get(block.id); field?.focus(); const offset = position ?? field?.value.length ?? 0; field?.setSelectionRange(offset, offset); }); }
+  function focus(block: Block | undefined, position?: number) {
+    if (!block) return;
+    pendingFocus.current = { id: block.id, position }; setActive(block.id);
+    const field = fields.current.get(block.id);
+    if (field && document.activeElement === field) { const offset = position ?? field.value.length; field.setSelectionRange(offset, offset); pendingFocus.current = null; }
+  }
   function resize(field: HTMLTextAreaElement) { field.style.height = '0px'; field.style.height = `${Math.max(30, field.scrollHeight)}px`; }
   function key(event: KeyboardEvent<HTMLTextAreaElement>, index: number) {
     if (composing.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
@@ -29,7 +51,7 @@ function Editor({ note, onChange, open, titles }: EditorProps) {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); commit(blocks.map((b, i) => i === index ? { ...b, text: toggleTask(b.text) } : b)); return; }
     if (event.key === 'Tab') { event.preventDefault(); commit(indentBlock(blocks, index, event.shiftKey)); focus(block, pos); }
     else if (event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) { event.preventDefault(); commit(moveBlock(blocks, index, event.key === 'ArrowUp' ? -1 : 1)); focus(block, pos); }
-    else if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); const ids = new Set(blocks.map(b => b.id)); const next = splitBlock(blocks, index, pos); commit(next); focus(next.find(b => !ids.has(b.id)) || next.find(b => b.id === block.id), 0); setCompletion(null); }
+    else if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); const ids = new Set(blocks.map(b => b.id)); const source = field.selectionEnd > pos ? blocks.map((b, i) => i === index ? { ...b, text: b.text.slice(0, pos) + b.text.slice(field.selectionEnd) } : b) : blocks; const next = splitBlock(source, index, pos); commit(next); focus(next.find(b => !ids.has(b.id)) || next.find(b => b.id === block.id), 0); setCompletion(null); }
     else if (event.key === 'Backspace' && pos === 0 && field.selectionEnd === 0 && index > 0) { event.preventDefault(); const previous = blocks[index - 1]; const length = previous.text.length; commit(mergeBlock(blocks, index)); focus(previous, length); }
     else if (event.key === 'ArrowUp' && pos === 0) { const rows = visibleBlocks(blocks); const row = rows.findIndex(r => r.index === index); if (row > 0) { event.preventDefault(); focus(rows[row - 1].block); } }
     else if (event.key === 'ArrowDown' && pos === field.value.length) { const rows = visibleBlocks(blocks); const row = rows.findIndex(r => r.index === index); if (row < rows.length - 1) { event.preventDefault(); focus(rows[row + 1].block, 0); } }
@@ -45,7 +67,17 @@ function Editor({ note, onChange, open, titles }: EditorProps) {
       <button className={`block-bullet ${hasChildren ? 'has-children' : ''}`} aria-label={hasChildren ? (block.collapsed ? '展开子块' : '折叠子块') : '编辑块'} aria-expanded={hasChildren ? !block.collapsed : undefined} onClick={() => hasChildren ? commit(blocks.map(b => b.id === block.id ? { ...b, collapsed: !b.collapsed } : b)) : focus(block)}>{hasChildren ? (block.collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />) : <span />}</button>
       {task && <button aria-label="切换任务状态" className={`task-check ${done ? 'checked' : ''}`} onClick={() => commit(blocks.map(b => b.id === block.id ? { ...b, text: toggleTask(b.text) } : b))}>{done ? <Check size={13} /> : /^DOING|^NOW/.test(block.text) ? <Circle size={10} /> : null}</button>}
       <div className="block-body">
-        {focused ? <textarea ref={el => { if (el) { fields.current.set(block.id, el); resize(el); } else fields.current.delete(block.id); }} aria-label="编辑块" value={block.text} rows={1} spellCheck={false} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} onBlur={() => { setTimeout(() => setActive(current => current === block.id ? null : current), 120); }} onKeyDown={e => key(e, index)} onChange={e => {
+        {focused ? <textarea ref={el => { if (el) { fields.current.set(block.id, el); resize(el); } else fields.current.delete(block.id); }} aria-label="记录块" value={block.text} rows={1} spellCheck={false} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} onBlur={() => { setTimeout(() => setActive(current => current === block.id ? null : current), 120); }} onKeyDown={e => key(e, index)} onPaste={e => {
+          if (composing.current) return;
+          const text = e.clipboardData.getData('text/plain'); if (!text.includes('\n')) return;
+          e.preventDefault(); const field = e.currentTarget;
+          const lines = text.replace(/\r\n/g, '\n').split('\n');
+          const first = { ...block, text: block.text.slice(0, field.selectionStart) + lines[0] };
+          const inserted = lines.slice(1).map(line => newBlock(line, block.depth));
+          const last = inserted[inserted.length - 1]; const offset = last.text.length; last.text += block.text.slice(field.selectionEnd);
+          let end = index + 1; while (end < blocks.length && blocks[end].depth > block.depth) end++;
+          commit([...blocks.slice(0, index), first, ...blocks.slice(index + 1, end), ...inserted, ...blocks.slice(end)]); focus(last, offset);
+        }} onChange={e => {
           const text = e.target.value; commit(blocks.map(b => b.id === block.id ? { ...b, text } : b)); resize(e.target);
           const cursor = e.target.selectionStart; const match = text.slice(0, cursor).match(/(\[\[|#)([^\]\s]*)$/);
           setCompletion(match ? { id: block.id, start: cursor - match[0].length, end: cursor, type: match[1], query: match[2] } : null);
@@ -68,12 +100,14 @@ export default function App() {
   const [help, setHelp] = useState(false);
   const [dark, setDark] = useState(() => localStorage.getItem('flowlog.theme') === 'dark');
   const [states, setStates] = useState<Record<string, SaveState>>({});
+  const statesRef = useRef(states); statesRef.current = states;
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [newTitle, setNewTitle] = useState<string | null>(null);
   const [jumpDate, setJumpDate] = useState(today);
   const history = useRef<{ past: { path: string; content: string }[]; future: { path: string; content: string }[]; last: string; time: number }>({ past: [], future: [], last: '', time: 0 });
   const importRef = useRef<HTMLInputElement>(null);
+  const taskCache = useRef(new WeakMap<Note, { block: Block; index: number }[]>());
   function applyVault(next: Vault) { vaultRef.current = next; setVault(next); }
   const changeNote = useCallback((note: Note, content: string, record = true) => {
     const current = vaultRef.current; if (!current) return;
@@ -90,11 +124,13 @@ export default function App() {
   async function load(choose = false) {
     setError('');
     try {
+      await flushAll();
+      setStates({});
       const next = await openVault(choose);
       let recovered = false;
       next.notes = next.notes.map(note => { const draft = recoveredDraft(note); if (draft !== null && draft !== note.content) { recovered = true; return { ...note, content: draft }; } return note; });
       if (!next.notes.some(n => n.path === journalPath(today))) next.notes.push({ path: journalPath(today), title: today, date: today, kind: 'journal', content: '', revision: '' });
-      applyVault(next); setStates({}); setSelected(null); setView('journals'); history.current = { past: [], future: [], last: '', time: 0 };
+      applyVault(next); setSelected(null); setView('journals'); history.current = { past: [], future: [], last: '', time: 0 };
       if (recovered) setNotice('已恢复未保存草稿。确认内容后编辑即可再次保存；也可先导出备份。');
     } catch (reason) { setError(String(reason)); }
   }
@@ -119,10 +155,10 @@ export default function App() {
       const win = getCurrentWindow(); const stop = await win.onCloseRequested(async event => { event.preventDefault(); try { await flushAll(); await win.destroy(); } catch (reason) { setError(`关闭前保存失败，窗口已保留：${String(reason)}`); } });
       if (disposed) stop(); else unlisten = stop;
     });
-    const beforeUnload = (event: BeforeUnloadEvent) => { if (Object.values(states).some(s => s.status !== 'saved')) { event.preventDefault(); event.returnValue = ''; } };
+    const beforeUnload = (event: BeforeUnloadEvent) => { if (Object.values(statesRef.current).some(s => s.status !== 'saved')) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('beforeunload', beforeUnload);
     return () => { disposed = true; unlisten?.(); window.removeEventListener('beforeunload', beforeUnload); };
-  }, [states]);
+  }, []);
   function openPage(title: string) {
     if (!title.trim()) return;
     const current = vaultRef.current; if (!current) return;
@@ -152,14 +188,21 @@ export default function App() {
     } catch (reason) { setError(`导入失败：${String(reason)}`); }
   }
   const notes = vault?.notes || [];
-  const journals = notes.filter(n => n.kind === 'journal').sort((a, b) => (b.date || b.title).localeCompare(a.date || a.title));
+  const journals = notes.filter(n => n.kind === 'journal').sort((a, b) => (a.date || a.title) === today ? -1 : (b.date || b.title) === today ? 1 : (b.date || b.title).localeCompare(a.date || a.title));
   const pages = notes.filter(n => n.kind === 'page').sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'));
   const selectedNote = notes.find(n => n.path === selected);
   const shown = selectedNote ? [selectedNote] : journals.slice(0, limit);
   const backlinks = selectedNote ? notes.filter(n => n.path !== selectedNote.path && extractLinks(n.content).some(title => title.toLowerCase() === selectedNote.title.toLowerCase())) : [];
   const searchResults = search === null ? [] : notes.filter(n => !search || `${n.title}\n${n.content}`.toLowerCase().includes(search.toLowerCase())).slice(0, 30);
   const allStates = Object.values(states); const issue = allStates.find(s => s.status === 'conflict' || s.status === 'error'); const saving = allStates.some(s => s.status === 'saving');
-  const taskNotes = notes.flatMap(note => parseMarkdown(note.content).map((block, index) => ({ note, block, index })).filter(({ block }) => taskPattern.test(block.text)));
+  const taskNotes = notes.flatMap(note => {
+    let tasks = taskCache.current.get(note);
+    if (!tasks) {
+      tasks = isOutlineMarkdown(note.content) ? parseMarkdown(note.content).map((block, index) => ({ block, index })).filter(({ block }) => taskPattern.test(block.text)) : [];
+      taskCache.current.set(note, tasks);
+    }
+    return tasks.map(task => ({ note, ...task }));
+  });
   const weekday = (date: string) => { const d = new Date(`${date}T12:00:00`); return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('zh-CN', { weekday: 'long' }); };
   return <div className="app-shell">
     <aside className={`sidebar ${sidebar ? 'mobile-open' : ''}`}>

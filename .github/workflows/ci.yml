@@ -25,6 +25,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: npx playwright install chromium
+      - run: npm run test:e2e
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - run: npx tauri build
       - name: Enforce installer size and generate SHA-256 report
@@ -40,6 +42,8 @@ jobs:
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             artifacts/package-report.json
+            src-tauri/Cargo.lock
+            test-results/
           if-no-files-found: warn
 
   release:

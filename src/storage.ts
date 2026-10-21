@@ -23,7 +23,13 @@ function register(vault: Vault): Vault {
     const key = localStorage.key(index);
     if (!key?.startsWith(prefix)) continue;
     try { const draft = JSON.parse(localStorage.getItem(key) || 'null') as Note | null;
-      if (draft && typeof draft.path === 'string' && typeof draft.content === 'string' && !vault.notes.some(n => n.path === draft.path)) vault.notes.push(draft);
+      if (draft && typeof draft.path === 'string' && typeof draft.content === 'string') {
+        const disk = vault.notes.find(n => n.path === draft.path);
+        if (disk?.content === draft.content) { localStorage.removeItem(key); index--; continue; }
+        if ((disk && disk.revision !== draft.revision) || (!disk && !!draft.revision)) conflicts.add(draft.path);
+        if (!disk) vault.notes.push(draft);
+        scheduleSave(draft);
+      }
     } catch { /* Legacy text drafts belong to existing notes. */ }
   }
   return vault;
@@ -44,11 +50,18 @@ export async function discardDraftsAndReload(): Promise<Vault> {
   timers.forEach(clearTimeout); timers.clear(); pending.clear(); conflicts.clear();
   const prefix = `flowlog.draft:${root}:`;
   for (let index = localStorage.length - 1; index >= 0; index--) { const key = localStorage.key(index); if (key?.startsWith(prefix)) localStorage.removeItem(key); }
-  return openVault();
+  const vault = desktop ? await invoke<Vault>('list_vault') : demo();
+  return register(vault);
 }
 export function scheduleSave(note: Note) {
   pending.set(note.path, { ...note });
-  try { localStorage.setItem(draftKey(note.path), JSON.stringify(note)); } catch { /* The live editor still retains content. */ }
+  try {
+    let revision = revisions.get(note.path) || note.revision;
+    if (conflicts.has(note.path)) {
+      try { revision = JSON.parse(localStorage.getItem(draftKey(note.path)) || 'null')?.revision ?? note.revision; } catch { revision = note.revision; }
+    }
+    localStorage.setItem(draftKey(note.path), JSON.stringify({ ...note, revision }));
+  } catch { /* The live editor still retains content. */ }
   if (conflicts.has(note.path)) { notify(note.path, { status: 'conflict', message: '磁盘文件已改变。草稿已保留，请下载草稿后重新打开笔记库。' }); return; }
   notify(note.path, { status: 'saving' });
   clearTimeout(timers.get(note.path));
@@ -66,6 +79,8 @@ export async function flushNote(path: string): Promise<void> {
         if (desktop) {
           const result = await invoke<{ revision: string }>('save_note', { path, content: note.content, expectedRevision: revisions.get(path) || note.revision || '' });
           revisions.set(path, result.revision);
+          const next = pending.get(path);
+          if (next) localStorage.setItem(draftKey(path), JSON.stringify({ ...next, revision: result.revision }));
         } else {
           const vault = demo(); const index = vault.notes.findIndex(n => n.path === path);
           const saved = { ...note, revision: String(Date.now()) };

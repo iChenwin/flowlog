@@ -6,11 +6,13 @@
 
 [English](README.en.md) · [AI 专家评审](docs/EXPERT-REVIEW.md) · [发布验收](docs/RELEASE-CHECKLIST.md) · [贡献](CONTRIBUTING.md) · [安全](SECURITY.md)
 
+![FlowLog 日记流界面（浏览器演示，使用虚构笔记）](docs/screenshot.png)
+
 ## 当前功能
 
 - 今天优先的日记流，按需展开更早日期，日历跳转。
 - 大纲块编辑、缩进与反缩进、子树移动与折叠、撤销重做。
-- TODO / DOING / DONE 任务与任务汇总。
+- TODO / DOING / DONE 任务与任务汇总（仅大纲 Markdown）。
 - `[[页面链接]]`、`#标签`、页面建议、反向链接与全文搜索。
 - 基础加粗、行内代码及网址显示；复杂 Markdown 提供原文编辑方式。
 - 桌面版使用本地 UTF-8 Markdown 文件；自动保存、内容哈希冲突检测、保存前快照和失败草稿提示。
@@ -28,7 +30,7 @@
 2. 按 Enter 继续记录、Tab 缩进；输入 `TODO 今天要做的事`，或按 Ctrl + Enter 切换任务状态。
 3. 输入 `[[我的计划]]` 连接页面，用 Ctrl + K 搜索。左下角可选择笔记库文件夹并查看数据位置。
 
-默认笔记库存于系统“文档”目录下的 `FlowLog`，不要求注册。日记为 `journals/YYYY_MM_DD.md`，页面为 `pages/*.md`；保存前版本位于 `.flowlog/backups`，冲突草稿可位于 `.flowlog/conflicts`。备份目前不自动轮转，请自行管理磁盘空间，并另做独立备份。
+首次默认笔记库存于系统“文档”目录下的 `FlowLog`，以后重启恢复上次所选目录，不要求注册。日记为 `journals/YYYY_MM_DD.md`，页面为 `pages/*.md`；保存前版本位于 `.flowlog/backups`，每篇保留最近 20 份；冲突草稿位于 `.flowlog/conflicts`，不会自动删除。具体恢复方法见 [存储说明](src-tauri/README.md)，请另做独立备份。
 
 ## 与 Logseq 的兼容边界
 
@@ -70,6 +72,7 @@ npm run tauri dev
 ```sh
 npm test
 npm run build
+npm run test:e2e
 cargo test --manifest-path src-tauri/Cargo.toml
 npx tauri build
 ```
