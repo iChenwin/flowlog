@@ -1,4 +1,4 @@
-name: Verify existing installer on native Windows
+name: Legacy WebView installer verification (manual only)
 on:
   workflow_dispatch:
     inputs:

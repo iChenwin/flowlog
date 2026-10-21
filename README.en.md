@@ -1,64 +1,21 @@
 # FlowLog
 
-A small local outliner for everyday journals, inspired by Logseq's flowing journal view. Independent project; not affiliated with Logseq.
+A lightweight Windows native daily outliner inspired by Logseq's journal stream.
 
-**0.1.0 is a preview. Back up your notes and try a copy of your vault first.** The measured Windows x64 installer is **2,980,260 bytes (about 2.98 MB)**, below the 20 MB limit. Consult the release's `package-report.json` for SHA-256.
+[Download 0.2.0 native preview](https://github.com/iChenwin/flowlog/releases/tag/v0.2.0) · [中文](README.md) · [Validation](docs/NATIVE-VALIDATION.md)
 
-[Download Windows preview](https://github.com/iChenwin/flowlog/releases/tag/v0.1.0) · [Validation evidence](docs/VALIDATION.md)
+**C# / WPF / AvalonEdit**, without Electron, WebView, Chromium or a local web server. Requires system **.NET Framework 4.8**, excluded from package size. Installer under 1 MB; exact bytes and SHA-256 are release attachments.
 
-[中文](README.md) · [AI role review](docs/EXPERT-REVIEW.md) · [Release checklist](docs/RELEASE-CHECKLIST.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+Continuous journals, native cross-block text selection and undo, indentation, subtree movement/folding, same-level block dragging, tasks, page links/completion, backlinks, persistent UUID block references and search. Notes are local UTF-8 Markdown. Synchronous recovery drafts, delayed atomic saves, backups and conflict preservation protect edits.
 
-## Implemented scope
+A native preview, not full Logseq compatibility. Full rich Markdown rendering, queries, embeds, plugins, graph view, whiteboards, PDF, sync, database graphs and Org mode are excluded. Real IME candidate composition, clean-machine/offline setup, long sessions and large-vault performance still need manual validation. Open a copy of an existing vault first.
 
-- Today-first journal stream with earlier entries and date navigation.
-- Outline editing, indentation, subtree movement, folding, undo and redo.
-- TODO / DOING / DONE tasks and task overview for outline Markdown.
-- Page links, tags, suggestions, backlinks and text search.
-- Basic bold, inline code and URL rendering; source editing for complex Markdown.
-- Local UTF-8 Markdown on desktop, autosave, revision checks, pre-save snapshots and draft/error feedback.
-- JSON backup export/import and light/dark themes.
-
-Implementation does not imply all manual acceptance checks have passed. The browser demo stores data in the current browser and does not access a native vault.
-
-## Install and start
-
-Use the Windows NSIS `.exe` preview in this repository's Releases and verify its SHA-256 against `package-report.json`. If no installer is published, build from source below.
-
-FlowLog uses Tauri 2, React, TypeScript and Rust, without Electron. It requires the system Microsoft Edge WebView2 runtime. The installer may include a bootstrapper, not the full runtime; a missing runtime may require an additional online download, excluded from the application installer size. Check release evidence for offline scenarios.
-
-Write in today's journal, press Enter for another block and Tab to indent. Use Ctrl + Enter for tasks, `[[Page]]` for connections and Ctrl + K to search. The bottom-left vault control opens a different folder and shows the data location. No account is required.
-
-The first default vault is `FlowLog` in the system Documents folder. Later launches reopen the last selected folder. Notes use `journals/YYYY_MM_DD.md` and `pages/*.md`. Previous contents are kept in `.flowlog/backups`, with the latest 20 snapshots per note; conflicting drafts in `.flowlog/conflicts` are retained. See [storage recovery](src-tauri/README.md) and keep independent backups.
-
-## Compatibility and limitations
-
-Only supported `.md` files directly inside `journals` and `pages` are read. Journals require `YYYY_MM_DD.md` names. Basic outlines, tasks and page links are supported; edited outlines may normalize indentation and line endings. This is not byte-for-byte or full semantic Logseq compatibility.
-
-Properties, block IDs and complex Markdown do not receive full Logseq semantics. Source editing preserves access to unsupported syntax. Block references, embeds, namespaces and queries are not fully supported. Graph visualization, whiteboards, PDF annotation, plugins, cloud sync, database graphs and Org mode are outside this release.
-
-Copy an existing vault before trying it. External changes are checked when saving; export your draft and reopen the application after a conflict. There is no live merge of external changes. Avoid simultaneous writers and confirm saved status before exiting.
-
-There is no automatic updater, signing guarantee or large-vault performance guarantee. Unsigned installers may trigger Windows reputation prompts. IME input, clean-machine installation, offline first launch and long editing sessions need separate manual verification; a passing build does not prove them.
-
-## Build
-
-Windows requires Node.js 22, Rust stable, Microsoft C++ Build Tools and WebView2.
-
-```sh
-npm ci
-npm run tauri dev
+```powershell
+./scripts/build-native.ps1 -Tests
+./scripts/package-native.ps1 -SkipBuild
+./scripts/smoke-native.ps1 -Installed
 ```
 
-```sh
-npm test
-npm run build
-npm run test:e2e
-cargo test --manifest-path src-tauri/Cargo.toml
-npx tauri build
-```
+Build uses the Windows .NET Framework C# compiler and checksum-pinned dependencies. Native code is under `native/`. The old `src/` and `src-tauri/` WebView prototype is retained as legacy source and excluded from native builds.
 
-Installers are emitted to `src-tauri/target/release/bundle/nsis/`. Run `pwsh -File scripts/check-bundle.ps1` for the size gate and checksum report. Windows CI includes installation, brief process startup and uninstallation smoke checks; these do not verify the editor or a clean virtual machine. `npm run dev` runs the browser demo only.
-
-Keyboard shortcuts: Enter / Shift + Enter for blocks / line breaks; Tab / Shift + Tab for indentation; Alt + arrows for subtree movement; Ctrl + Enter for task state; Ctrl + K for search; Ctrl + Z / Ctrl + Shift + Z for undo / redo.
-
-MIT © 2026 iChenwin. Please report reproducible issues with anonymous examples, never private notes.
+MIT © 2026 iChenwin. Includes AvalonEdit under MIT. No Logseq AGPL source has been copied; workflows are reimplemented using native Windows controls.

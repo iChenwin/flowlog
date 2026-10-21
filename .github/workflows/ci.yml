@@ -1,9 +1,5 @@
-name: Windows quality and preview release
+name: Legacy WebView prototype (manual only)
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
-  pull_request:
   workflow_dispatch:
 
 permissions:

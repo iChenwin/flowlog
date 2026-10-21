@@ -8,3 +8,7 @@ playwright-report/
 .env*
 artifacts/
 src-tauri/gen/
+native/lib/
+native/out/
+native/packages/
+native/TestResults/

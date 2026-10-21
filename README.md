@@ -1,86 +1,75 @@
 # FlowLog 流记
 
-面向日常事项与随手记录的轻量本地大纲笔记。受 Logseq 的日记流启发，以独立品牌提供一个更小、更集中的桌面实现。
+以连续日记流为中心的轻量 Windows 大纲笔记。**0.2.0 使用 C# / WPF / AvalonEdit 原生实现**，直接编辑本地 Markdown。
 
-**0.1.0 为预览版。请先备份，并在笔记库副本上试用。** Windows x64 安装包实测 **2,980,260 字节（约 2.98 MB）**，低于 20 MB 上限；校验值见发布附件 `package-report.json`。
+[下载 Windows 原生版](https://github.com/iChenwin/flowlog/releases/tag/v0.2.0) · [验证记录](docs/NATIVE-VALIDATION.md) · [架构和兼容边界](docs/NATIVE-ARCHITECTURE.md) · [English](README.en.md)
 
-[下载 Windows 预览版](https://github.com/iChenwin/flowlog/releases/tag/v0.1.0) · [实际验证记录](docs/VALIDATION.md)
+安装包小于 1 MB，精确字节和 SHA-256 见发布附件 `native-package-report.json`。运行需要系统 **.NET Framework 4.8**，该系统组件不包含在安装包体积内。应用不使用 Electron、WebView、Chromium 或本地网页服务。
 
-[English](README.en.md) · [AI 专家评审](docs/EXPERT-REVIEW.md) · [发布验收](docs/RELEASE-CHECKLIST.md) · [贡献](CONTRIBUTING.md) · [安全](SECURITY.md)
+![Windows 原生窗口，虚构笔记](docs/native-screenshot.png)
 
-![FlowLog 日记流界面（浏览器演示，使用虚构笔记）](docs/screenshot.png)
+## 日常功能
 
-## 当前功能
+- 今天优先的连续日记流，滚动增量追加更早的日记。
+- 每篇笔记是一份完整的原生文本编辑文档，支持跨块选区、复制粘贴和撤销重做；导航后保留光标、选区和历史。
+- Enter 拆块、Shift+Enter 块内换行、Tab 缩进、整子树移动与折叠。左侧手柄支持同文档同层块重排。
+- TODO / DOING / DONE 任务切换和汇总；全文搜索。
+- `[[页面]]` 和 `#标签` 导航、页面补全、反向链接；持久化 `id:: UUID` 和 `((UUID))` 块引用定位。
+- `/` 命令补全；源码模式直接编辑复杂 Markdown。显示层不会重新序列化整篇笔记。
+- 每次输入同步写入恢复草稿，稍后异步保存 Markdown；冲突保留双方，失败可重试或导出草稿。
 
-- 今天优先的日记流，按需展开更早日期，日历跳转。
-- 大纲块编辑、缩进与反缩进、子树移动与折叠、撤销重做。
-- TODO / DOING / DONE 任务与任务汇总（仅大纲 Markdown）。
-- `[[页面链接]]`、`#标签`、页面建议、反向链接与全文搜索。
-- 基础加粗、行内代码及网址显示；复杂 Markdown 提供原文编辑方式。
-- 桌面版使用本地 UTF-8 Markdown 文件；自动保存、内容哈希冲突检测、保存前快照和失败草稿提示。
-- JSON 备份导出与导入、浅色与深色主题。
+这是原生预览版，仍未达到 Logseq 全部本地编辑能力。完整中文输入法候选词交互、长期编辑、大库性能和真实 Logseq 副本迁移需要进一步人工验证；已执行的自动测试不能替代这些验收。
 
-这些是当前实现范围，不表示所有平台与人工场景均已验收。浏览器版本仅演示交互，数据存于当前浏览器，不能直接操作磁盘笔记库。
+## 安装与开始
 
-## 安装与一分钟上手
+1. 下载 `FlowLog-Native-0.2.0-Setup.exe`，或解压便携 ZIP。无需管理员权限。
+2. 系统需有 .NET Framework 4.8；安装程序会检查并提示缺失，不会隐藏下载运行时。
+3. 选择本地笔记库，或使用“文档”目录中的 `FlowLog`。输入第一条事项，Enter 继续，Tab 缩进。
+4. 输入 `[[项目计划]]`，Ctrl+单击链接打开页面；Ctrl+K 搜索，Ctrl+Enter 切换任务。
 
-在本仓库 Releases 页面选择 Windows NSIS `.exe` 预发布安装包，并对照 `package-report.json` 校验 SHA-256。若尚无安装包，请按下方步骤从源码构建。
+日记为 `journals/YYYY_MM_DD.md`，页面为 `pages/*.md`。保存前版本在 `.flowlog/backups`（每篇最近20份），冲突双方在 `.flowlog/conflicts`。恢复草稿在当前账户 `%APPDATA%/FlowLogNative/drafts`。卸载保留笔记与草稿。每个 Windows 登录会话只启动一个应用实例，避免多窗口争抢草稿。
 
-桌面采用 **Tauri 2 + React + TypeScript + Rust**，不用 Electron。依赖系统 **Microsoft Edge WebView2**。安装包可包含运行时引导程序，但不包含完整 WebView2 运行时；系统缺失运行时时可能需要联网下载，额外下载不计入应用安装包大小。有运行时后的离线使用仍应按发布验收记录核实。
+支持 `FlowLog.Native.exe --vault "D:\Notes\MyVault"` 指定目录。首次打开已有 Logseq 图谱请用副本。外部修改会在保存时检查，没有实时自动合并；不要同时用多个编辑器写入同库。
 
-1. 打开应用，在今天的日记中写下第一条事项。
-2. 按 Enter 继续记录、Tab 缩进；输入 `TODO 今天要做的事`，或按 Ctrl + Enter 切换任务状态。
-3. 输入 `[[我的计划]]` 连接页面，用 Ctrl + K 搜索。左下角可选择笔记库文件夹并查看数据位置。
+## 与 Logseq 的关系
 
-首次默认笔记库存于系统“文档”目录下的 `FlowLog`，以后重启恢复上次所选目录，不要求注册。日记为 `journals/YYYY_MM_DD.md`，页面为 `pages/*.md`；保存前版本位于 `.flowlog/backups`，每篇保留最近 20 份；冲突草稿位于 `.flowlog/conflicts`，不会自动删除。具体恢复方法见 [存储说明](src-tauri/README.md)，请另做独立备份。
+Logseq 桌面使用 Electron，其编辑器以 ClojureScript 实现，见官方 [package.json](https://github.com/logseq/logseq/blob/master/package.json) 和 [editor.cljs](https://github.com/logseq/logseq/blob/master/src/main/frontend/components/editor.cljs)。本项目重现日记流及常用块编辑行为，以 Windows 原生控件重新实现，没有复制其 AGPL 源码。
 
-## 与 Logseq 的兼容边界
-
-| 内容或能力 | 当前范围 |
+| 能力 | 0.2 原生版范围 |
 | --- | --- |
-| Markdown 图谱目录 | 读取所选目录直接下的 `journals`、`pages` 中受支持的 `.md` 文件，不递归扫描 |
-| 日记文件名 | `YYYY_MM_DD.md`；其他命名不作为日记读取 |
-| 多级 `- ` 大纲、常用任务、页面链接 | 提供基本编辑与导航，语义不等同于完整 Logseq |
-| 属性、块 ID、复杂 Markdown | 不提供完整语义；复杂结构以原文方式编辑，未知内容不代表功能已支持 |
-| 已编辑大纲的格式 | 可能规范化缩进与换行；不是字节级往返兼容 |
-| 块引用、嵌入、命名空间、查询 | 不提供完整支持 |
-| 图谱、白板、PDF、插件、云同步、数据库图谱、Org mode | 不支持 |
-
-首次试用请复制原库，再打开副本。应用不提供完整 Logseq 迁移器。磁盘外部修改会在保存时检测；出现冲突先导出草稿，再点击“放弃草稿并重新读取”查看磁盘版本，不要用同一目录进行多个编辑器并行写入。当前外部文件变化不会实时自动合并。退出前确认保存成功。
-
-尚未提供自动更新、发布签名保证或大库性能承诺。未签名安装包可能显示 Windows 信誉提示。中文输入法、干净系统安装、离线首次启动与长期编辑需要独立人工验证，不能由构建成功推定。具体证据见对应版本的发布记录及 CI。
+| 日记流、大纲、任务、页面链接、搜索 | 已实现，实际证据见验证记录 |
+| 选区、剪贴板、撤销、块操作 | 原生文档；同层拖块，跨层用缩进快捷键 |
+| 属性及未知 Markdown | 保留原文，不提供完整属性语义；部分元数据可在源码模式编辑 |
+| 块引用 | UUID 创建、复制引用和跳转；不渲染嵌入内容 |
+| 文件兼容 | 读取 journals/pages 顶层 UTF-8 `.md`；日记识别 `YYYY_MM_DD`；新页面名使用 URI 编码 |
+| Markdown 排版 | 大纲圆点、标题/任务/链接着色、代码区；不支持完整富文本渲染 |
+| 查询、图谱、白板、PDF、插件、同步、数据库图谱、Org mode | 不包含 |
 
 ## 快捷键
 
 | 操作 | 快捷键 |
 | --- | --- |
-| 下一块 / 块内换行 | Enter / Shift + Enter |
-| 缩进 / 反缩进 | Tab / Shift + Tab |
-| 移动子树 | Alt + ↑ / ↓ |
-| 任务状态 | Ctrl + Enter |
-| 搜索 | Ctrl + K |
-| 撤销 / 重做 | Ctrl + Z / Ctrl + Shift + Z |
-| 跨块导航 | 块首 ↑ / 块尾 ↓ |
+| 下一块 / 块内换行 | Enter / Shift+Enter |
+| 缩进 / 反缩进 | Tab / Shift+Tab |
+| 移动整子树 | Alt+↑ / ↓ |
+| 切换任务 | Ctrl+Enter |
+| 折叠 / 展开 | Ctrl+. |
+| 复制块引用 | Ctrl+Shift+C |
+| 搜索 / 重试保存 | Ctrl+K / Ctrl+S |
+| 撤销 / 重做 | Ctrl+Z / Ctrl+Y |
 
-## 从源码运行
+## 构建
 
-Windows 开发环境需要 Node.js 22、Rust stable、Microsoft C++ Build Tools 和 WebView2。
+Windows 系统 .NET Framework 4.x C# 编译器即可，无需 Visual Studio、.NET SDK、Node 或 Rust。脚本下载并校验固定版本 AvalonEdit 与 NSIS 3.13。
 
-```sh
-npm ci
-npm run tauri dev
+```powershell
+./scripts/build-native.ps1 -Tests
+./scripts/package-native.ps1 -SkipBuild
+./scripts/smoke-native.ps1 -Installed
 ```
 
-```sh
-npm test
-npm run build
-npm run test:e2e
-cargo test --manifest-path src-tauri/Cargo.toml
-npx tauri build
-```
+输出在 `native/out`，发布包在 `native/packages`。`-Tests` 运行真实 STA WPF 编辑器/窗口与文件测试；安装冒烟通过跨进程 Windows UIAutomation 验证保存、重开、强杀恢复和冲突。安装冒烟使用没有安装本应用的测试账户。CI 为 [Windows native build and release](.github/workflows/windows-native.yml)。
 
-桌面安装包输出至 `src-tauri/target/release/bundle/nsis/`。执行 `pwsh -File scripts/check-bundle.ps1` 检查实际大小并生成 SHA-256 报告。Windows CI 还进行静默安装、短暂启动和卸载冒烟；它不替代编辑器功能、中文输入法或干净虚拟机验证。`npm run dev` 仅启动浏览器演示。
+0.1 Tauri/WebView 原型保留在 `src`、`src-tauri`，工作流改为手动，不参与原生版构建。它未满足原生编辑体验要求，旧截图和验证记录不能作为原生版证据。[此前 AI 角色评审](docs/EXPERT-REVIEW.md) 保留用于追溯，不能代替产品验收。
 
-## 开源与反馈
-
-MIT © 2026 iChenwin。欢迎提交可复现问题与贡献，优先完善本地保存、编辑体验、兼容边界和包体积。请使用匿名样例，勿上传私人笔记。
+MIT © 2026 iChenwin。AvalonEdit 使用 MIT，随包附许可证。参见[贡献](CONTRIBUTING.md)与[安全](SECURITY.md)。

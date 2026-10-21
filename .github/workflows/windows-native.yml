@@ -1,0 +1,54 @@
+name: Windows native build and release
+on:
+  push:
+    branches: [main]
+    tags: ['v0.2.*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build native Windows app and run STA tests
+        shell: pwsh
+        run: ./scripts/build-native.ps1 -Tests
+      - name: Package installer and portable app (under 20MB)
+        shell: pwsh
+        run: ./scripts/package-native.ps1 -SkipBuild
+      - name: Install and verify real native executable with Windows UIAutomation
+        shell: pwsh
+        run: ./scripts/smoke-native.ps1 -Installed
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flowlog-windows-native
+          path: |
+            native/packages/*
+            native/TestResults/*.json
+            native/TestResults/*.png
+          if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/v0.2.')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: flowlog-windows-native
+          path: release-assets
+      - uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          files: |
+            release-assets/packages/*
+            release-assets/TestResults/native-smoke.json
+          fail_on_unmatched_files: true
+          body: |
+            Windows native WPF + AvalonEdit preview. No Electron or WebView.
+            Requires system .NET Framework 4.8; this system component is not included in the package size.
+            See native-package-report.json for exact bytes and SHA-256, and docs/NATIVE-VALIDATION.md for tests and limitations.
