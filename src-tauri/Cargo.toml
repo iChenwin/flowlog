@@ -1,0 +1,26 @@
+[package]
+name = "flowlog"
+version = "0.1.0"
+description = "A small local-first daily outliner"
+authors = ["FlowLog contributors"]
+edition = "2021"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+tempfile = "3"
+rfd = "0.15"
+dirs = "6"
+percent-encoding = "2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"
