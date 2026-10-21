@@ -12,6 +12,9 @@ $previousArguments = $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
 $previousUserData = $env:WEBVIEW2_USER_DATA_FOLDER
 $app = $null
 $exe = $null
+$policyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+$previousPolicy = $null
+$policyHadValue = $false
 function Close-SmokeApp {
   if ($app) {
     if (-not $app.WaitForExit(15000)) { throw 'Normal app close timed out; pending saves may be blocking exit.' }
@@ -31,6 +34,13 @@ try {
   if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
   $exe = Get-ChildItem -LiteralPath $installDir -Filter '*.exe' -File | Where-Object { $_.Name -notmatch 'uninstall' } | Select-Object -First 1
   if (-not $exe) { throw 'Installed application executable missing' }
+  # WebView2 150+ ignores environment flags in elevated CI hosts. Microsoft
+  # documents per-app HKLM policy as the supported channel in that situation.
+  New-Item -Path $policyPath -Force | Out-Null
+  $policyValues = Get-ItemProperty -LiteralPath $policyPath
+  $policyHadValue = $null -ne $policyValues.PSObject.Properties[$exe.Name]
+  if ($policyHadValue) { $previousPolicy = $policyValues.($exe.Name) }
+  New-ItemProperty -LiteralPath $policyPath -Name $exe.Name -Value '--remote-debugging-port=9222' -PropertyType String -Force | Out-Null
   foreach ($phase in @('write', 'reopen-conflict')) {
     Write-Output "Native WebView2 phase: $phase"
     $app = Start-Process -FilePath $exe.FullName -WindowStyle Hidden -PassThru
@@ -48,6 +58,10 @@ try {
   }
   $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $previousArguments
   $env:WEBVIEW2_USER_DATA_FOLDER = $previousUserData
+  if ($exe) {
+    if ($policyHadValue) { Set-ItemProperty -LiteralPath $policyPath -Name $exe.Name -Value $previousPolicy }
+    else { Remove-ItemProperty -LiteralPath $policyPath -Name $exe.Name -ErrorAction SilentlyContinue }
+  }
   if ($null -ne $previousSelection) { [System.IO.File]::WriteAllBytes($remembered, [byte[]]$previousSelection) }
   elseif (Test-Path -LiteralPath $remembered) { Remove-Item -LiteralPath $remembered }
   if ($exe) {

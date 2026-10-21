@@ -32,6 +32,8 @@ GitHub Actions 执行 Rust 测试、Tauri / NSIS 构建、安装包小于 20,000
 
 方法依据：[Playwright WebView2](https://playwright.dev/docs/next/webview2)、[Microsoft WebView2 调试文档](https://learn.microsoft.com/en-us/microsoft-edge/webview2/how-to/debug-visual-studio-code)。
 
+首次 CI 的原生自动化因 WebView2 150+ 对管理员进程忽略调试环境变量而未能连接；参见 [微软说明](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5645)。后续 CI 仅在临时测试账户为应用设置并恢复 HKLM 调试策略；产品不启用调试端口。`native-verify.yml` 复用已构建安装包前会验证产品源码与原始构建提交相同，并核对安装包 SHA-256，避免把不同代码的测试误当作当前版本证据。
+
 ## 仍需人工验证
 
 - 微软拼音 / 第三方输入法真实候选窗口、撤销及连续长时间输入。
