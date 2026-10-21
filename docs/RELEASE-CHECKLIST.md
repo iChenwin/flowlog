@@ -1,14 +1,14 @@
 # 发布验收
 
-此文件是检查清单，不是通过证明。未填写证据的项目均视为待验证。
+此文件记录 0.1.0 的验收状态，证据见 [验证记录](VALIDATION.md)。未填写证据的项目均视为待验证。
 
 ## 自动门禁
 
-- [ ] `npm ci`、`npm test`、`npm run build` 成功。
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml` 成功。
-- [ ] `npx tauri build` 生成 Windows NSIS 安装包。
-- [ ] 每个 NSIS 安装包小于 **20,000,000 字节**；公开精确大小及 SHA-256。
-- [ ] Windows CI 中静默安装、启动进程、关闭及卸载冒烟通过。此检查不验证编辑器、IME、离线安装或干净虚拟机。
+- [x] `npm ci`、`npm test`、`npm run build` 成功；23 项单元测试及 11 项界面测试通过。
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml` 成功；Windows 上 7 项测试通过。
+- [x] `npx tauri build` 生成 Windows NSIS 安装包。
+- [x] NSIS 安装包 **2,980,260 字节**，小于 **20,000,000 字节**；发布附 SHA-256。
+- [x] Windows CI 中静默安装、真实中文 Markdown 落盘、关闭重开、外部冲突、正常退出与卸载通过；不代表真实 IME、离线安装或干净虚拟机验收。
 
 ## 人工门禁
 

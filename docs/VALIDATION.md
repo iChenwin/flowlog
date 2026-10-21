@@ -21,14 +21,16 @@
 
 GitHub Actions 执行 Rust 测试、Tauri / NSIS 构建、安装包小于 20,000,000 字节检查、SHA-256、静默安装、短暂启动与卸载。最终安装包大小与对应运行链接以发布附件及版本说明为准。
 
-### 新增真实桌面桥接门禁（等待 CI 执行）
+### 已通过的真实桌面桥接验证
 
 `scripts/smoke-install.ps1` 仅允许在 GitHub Actions 运行。它创建独立临时笔记库与 WebView2 用户数据目录，暂存并恢复 CI 账户的笔记库选择，通过安装后的真实应用完成两次启动：
 
 1. 使用 Playwright 连接真实 WebView2 CDP，确认桌面保存标识与所选目录，编辑中文并直接读取 Markdown 文件核对落盘。
 2. 正常关闭并重开应用，确认内容重载；模拟外部文件修改后继续编辑，断言磁盘保留外部版本且 `.flowlog/conflicts` 存在中文草稿，再显式放弃待保存更改、读取磁盘版本并正常关闭。
 
-脚本不模拟 Tauri 桥接。调试端口只经 CI 子进程环境开启，测试后恢复，不改变产品配置。结果写入 `artifacts/native-smoke.json`，连接页面后的失败截图写入 `artifacts/native-smoke.png`。本机仅检查脚本语法；新增门禁是否通过以实际 CI 结果为准。此验证仍不等同于真实中文输入法候选操作、干净虚拟机或故障断电测试。
+脚本不模拟 Tauri 桥接。调试配置仅在临时 CI 环境开启，测试后恢复，不改变产品配置。结果写入 `artifacts/native-smoke.json`，截图写入 `artifacts/native-smoke.png`。[原生复验 39535265824](https://github.com/iChenwin/flowlog/actions/runs/39535265824) 已通过两个阶段、正常关闭和卸载；安装包 SHA-256 与原始构建一致，产品源码差异检查通过。此验证仍不等同于真实中文输入法候选操作、干净虚拟机或故障断电测试。
+
+发布安装包：`FlowLog_0.1.0_x64-setup.exe`，**2,980,260 字节（约 2.98 MB）**。SHA-256：`6a2e50cd925b92efe69f907e76d57a1af503114b0249e3d85f82e30583bc2eba`。
 
 方法依据：[Playwright WebView2](https://playwright.dev/docs/next/webview2)、[Microsoft WebView2 调试文档](https://learn.microsoft.com/en-us/microsoft-edge/webview2/how-to/debug-visual-studio-code)。
 

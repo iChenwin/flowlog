@@ -2,7 +2,9 @@
 
 A small local outliner for everyday journals, inspired by Logseq's flowing journal view. Independent project; not affiliated with Logseq.
 
-**0.1.0 is a preview. Back up your notes and try a copy of your vault first.** The Windows installer target is **under 20,000,000 bytes**, aiming for about 15 MB. Consult the release's `package-report.json` for measured bytes and SHA-256; a target is not a measured result.
+**0.1.0 is a preview. Back up your notes and try a copy of your vault first.** The measured Windows x64 installer is **2,980,260 bytes (about 2.98 MB)**, below the 20 MB limit. Consult the release's `package-report.json` for SHA-256.
+
+[Download Windows preview](https://github.com/iChenwin/flowlog/releases/tag/v0.1.0) · [Validation evidence](docs/VALIDATION.md)
 
 [中文](README.md) · [AI role review](docs/EXPERT-REVIEW.md) · [Release checklist](docs/RELEASE-CHECKLIST.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
