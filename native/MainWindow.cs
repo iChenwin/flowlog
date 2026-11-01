@@ -44,7 +44,7 @@ namespace FlowLog.Native
         readonly DispatcherTimer closeTimer = new DispatcherTimer();
         Grid layout;
         Border sidebar, rightbar, topbar;
-        Button sidebarToggle, themeButton;
+        Button sidebarToggle, themeButton, sourceButton;
         Brush ink, muted, paper, panel, edge, accent;
         string view = "journals";
         Note active;
@@ -124,7 +124,7 @@ namespace FlowLog.Native
             TextBlock searchHint = new TextBlock { Text = "搜索笔记   Ctrl+K", Foreground = muted, FontSize = 12, Margin = new Thickness(11, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
             searchHost.Children.Add(search); searchHost.Children.Add(searchHint);
             AutomationProperties.SetAutomationId(search, "SearchBox"); AutomationProperties.SetName(search, "搜索全部笔记"); search.TextChanged += delegate { searchHint.Visibility = search.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed; if (!loading) { searchTimer.Stop(); searchTimer.Start(); } }; top.Children.Add(searchHost);
-            Button raw = Button("原文", delegate { sourceMode = !sourceMode; foreach (EditState s in states.Values) if (s.Editor != null) s.Editor.SourceMode = sourceMode; }); raw.Margin = new Thickness(14, 0, 0, 0); raw.ToolTip = "切换 Markdown 原文与大纲视图"; top.Children.Add(raw);
+            sourceButton = Button("原文", delegate { sourceMode = !sourceMode; sourceButton.Content = sourceMode ? "渲染" : "原文"; foreach (EditState s in states.Values) if (s.Editor != null) s.Editor.SourceMode = sourceMode; }); sourceButton.Margin = new Thickness(14, 0, 0, 0); sourceButton.ToolTip = "切换 Markdown 原文与大纲视图"; top.Children.Add(sourceButton);
             topbar = new Border { Padding = new Thickness(32, 0, 20, 0), BorderBrush = edge, BorderThickness = new Thickness(0, 0, 0, 1), Background = paper, Child = top }; Grid.SetColumn(topbar, 1); Grid.SetColumnSpan(topbar, 2); layout.Children.Add(topbar);
             stream.Margin = new Thickness(46, 25, 46, 60); AutomationProperties.SetAutomationId(stream, "JournalStream");
             scroll.Content = stream; scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto; scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled; scroll.Background = paper;
