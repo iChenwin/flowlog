@@ -56,7 +56,7 @@ namespace FlowLog.Native
         {
             FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI");
             FontSize = 16;
-            Foreground = new SolidColorBrush(Color.FromRgb(44, 54, 59));
+            Foreground = new SolidColorBrush(Color.FromRgb(67, 63, 56));
             Background = Brushes.Transparent;
             Padding = new Thickness(14, 10, 20, 30);
             WordWrap = true;
@@ -744,10 +744,10 @@ namespace FlowLog.Native
     {
         private readonly OutlineEditor owner;
         public OutlineColorizer(OutlineEditor owner) { this.owner = owner; }
-        private static readonly Brush link = new SolidColorBrush(Color.FromRgb(38, 116, 139));
-        private static readonly Brush muted = new SolidColorBrush(Color.FromRgb(130, 143, 151));
-        private static readonly Brush darkLink = new SolidColorBrush(Color.FromRgb(118, 205, 211));
-        private static readonly Brush darkMuted = new SolidColorBrush(Color.FromRgb(161, 174, 183));
+        private static readonly Brush link = new SolidColorBrush(Color.FromRgb(16, 107, 163));
+        private static readonly Brush muted = new SolidColorBrush(Color.FromRgb(100, 100, 100));
+        private static readonly Brush darkLink = new SolidColorBrush(Color.FromRgb(138, 187, 187));
+        private static readonly Brush darkMuted = new SolidColorBrush(Color.FromRgb(147, 161, 161));
         protected override void ColorizeLine(DocumentLine line)
         {
             string text = CurrentContext.Document.GetText(line);

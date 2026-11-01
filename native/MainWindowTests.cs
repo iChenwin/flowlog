@@ -105,11 +105,11 @@ namespace FlowLog.Native
                 Screenshot(window, Path.Combine(native, "TestResults", "native-dark.png"));
                 OutlineEditor editor = Editor(window);
                 SolidColorBrush foreground = editor.Foreground as SolidColorBrush;
-                Require(foreground != null && foreground.Color.R > 180, "Dark theme retains readable editor foreground");
+                Require(foreground != null && foreground.Color.R > 150, "Dark theme retains readable editor foreground");
                 Click(window, "全部页面");
                 Button page = Descendants<Button>(window).First(delegate(Button b) { return Convert.ToString(b.Content) == "项目计划"; });
                 SolidColorBrush pageInk = page.Foreground as SolidColorBrush;
-                Require(pageInk != null && pageInk.Color.R > 180, "Dark theme page list retains readable button text");
+                Require(pageInk != null && pageInk.Color.R > 150, "Dark theme page list retains readable button text");
                 page.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump(30);
                 Require(Editor(window).Text.Contains(today.Title), "Page navigation opens linked project document");
                 Click(window, "待办任务");

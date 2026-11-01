@@ -73,9 +73,9 @@ namespace FlowLog.Native
 
         void SetPalette()
         {
-            ink = B(dark ? "#E5E8EB" : "#26343B"); muted = B(dark ? "#A1AEB7" : "#72818B");
-            paper = B(dark ? "#20262B" : "#FFFFFF"); panel = B(dark ? "#192025" : "#F4F6F7");
-            edge = B(dark ? "#39444C" : "#E6EBEE"); accent = B(dark ? "#6DD4C3" : "#117E74");
+            ink = B(dark ? "#A4B5B6" : "#433F38"); muted = B(dark ? "#93A1A1" : "#646464");
+            paper = B(dark ? "#002B36" : "#FFFFFF"); panel = B(dark ? "#023643" : "#F7F7F7");
+            edge = B(dark ? "#0E5263" : "#CCCCCC"); accent = B(dark ? "#8ABBBB" : "#106BA3");
             Background = paper; Foreground = ink;
         }
         static Brush B(string value) { return (Brush)new BrushConverter().ConvertFromString(value); }
