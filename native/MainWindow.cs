@@ -13,6 +13,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using WpfPath = System.Windows.Shapes.Path;
+using WpfShape = System.Windows.Shapes.Shape;
 
 namespace FlowLog.Native
 {
@@ -42,11 +44,12 @@ namespace FlowLog.Native
         readonly DispatcherTimer closeTimer = new DispatcherTimer();
         Grid layout;
         Border sidebar, rightbar, topbar;
+        Button sidebarToggle;
         Brush ink, muted, paper, panel, edge, accent;
         string view = "journals";
         Note active;
         int journalCount = 7;
-        bool dark, sourceMode, closingRequested, closeAllowed, loading;
+        bool dark, sourceMode, sidebarCollapsed, closingRequested, closeAllowed, loading;
 
         public MainWindow(string rootOverride = null)
         {
@@ -108,6 +111,13 @@ namespace FlowLog.Native
             side.Children.Add(Button("◐   切换明暗", ToggleTheme));
             side.Children.Add(Button("?   快捷键与说明", ShowHelp));
             StackPanel top = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            sidebarToggle = Button("", delegate { ToggleSidebar(); });
+            sidebarToggle.Content = PanelLeftIcon();
+            sidebarToggle.Width = 30; sidebarToggle.Padding = new Thickness(0); sidebarToggle.Margin = new Thickness(0, 0, 12, 0);
+            sidebarToggle.HorizontalContentAlignment = HorizontalAlignment.Center; sidebarToggle.VerticalContentAlignment = VerticalAlignment.Center;
+            sidebarToggle.ToolTip = "收起侧边栏    Ctrl+B"; sidebarToggle.IsTabStop = true;
+            AutomationProperties.SetAutomationId(sidebarToggle, "SidebarToggle"); AutomationProperties.SetName(sidebarToggle, "收起侧边栏");
+            top.Children.Add(sidebarToggle);
             heading.Text = "每日笔记"; heading.FontSize = 18; heading.FontWeight = FontWeights.SemiBold; heading.Foreground = ink; heading.Margin = new Thickness(0, 0, 26, 0); heading.VerticalAlignment = VerticalAlignment.Center; top.Children.Add(heading);
             search.Width = 220; search.Padding = new Thickness(10, 6, 10, 6); search.FontSize = 13; search.Background = panel; search.Foreground = ink; search.BorderBrush = edge; search.ToolTip = "搜索全部笔记 · Ctrl+K";
             Grid searchHost = new Grid { Width = 220 };
@@ -124,6 +134,41 @@ namespace FlowLog.Native
             Grid.SetColumn(rightbar, 2); Grid.SetRow(rightbar, 1); layout.Children.Add(rightbar);
             status.Foreground = muted; status.FontSize = 11; status.Margin = new Thickness(15, 5, 0, 0); AutomationProperties.SetAutomationId(status, "SaveStatus");
             Border footer = new Border { Background = panel, BorderBrush = edge, BorderThickness = new Thickness(0, 1, 0, 0), Child = status }; Grid.SetRow(footer, 2); Grid.SetColumn(footer, 1); Grid.SetColumnSpan(footer, 2); layout.Children.Add(footer);
+        }
+        // 16px panel-left outline, adapted from DeepSeek Harness's IconPanelLeftOutlineRegular.
+        // A 1.5px rounded stroke matches the weight and soft terminals of the text glyphs.
+        FrameworkElement PanelLeftIcon()
+        {
+            WpfPath path = new WpfPath
+            {
+                Data = Geometry.Parse("M13.5 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z M5.5 1.5V14.5"),
+                Stroke = ink,
+                StrokeThickness = 1.5,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round,
+                Fill = Brushes.Transparent,
+            };
+            AutomationProperties.SetAutomationId(path, "SidebarToggleIcon");
+            Canvas canvas = new Canvas { Width = 16, Height = 16 };
+            canvas.Children.Add(path);
+            return new Viewbox { Width = 16, Height = 16, Child = canvas };
+        }
+        void ToggleSidebar()
+        {
+            sidebarCollapsed = !sidebarCollapsed;
+            if (sidebarCollapsed)
+            {
+                sidebar.Visibility = Visibility.Collapsed;
+                layout.ColumnDefinitions[0].Width = new GridLength(0);
+            }
+            else
+            {
+                sidebar.Visibility = Visibility.Visible;
+                layout.ColumnDefinitions[0].Width = new GridLength(200);
+            }
+            sidebarToggle.ToolTip = (sidebarCollapsed ? "展开侧边栏" : "收起侧边栏") + "    Ctrl+B";
+            AutomationProperties.SetName(sidebarToggle, sidebarCollapsed ? "展开侧边栏" : "收起侧边栏");
         }
         void ShowWelcome()
         {
@@ -434,15 +479,18 @@ namespace FlowLog.Native
             if (border != null) { border.Background = PaletteBrush(border.Background, before, after); border.BorderBrush = PaletteBrush(border.BorderBrush, before, after); }
             Panel container = element as Panel; if (container != null) container.Background = PaletteBrush(container.Background, before, after);
             TextBlock text = element as TextBlock; if (text != null) text.Foreground = PaletteBrush(text.Foreground, before, after);
+            WpfShape shape = element as WpfShape;
+            if (shape != null) { shape.Stroke = PaletteBrush(shape.Stroke, before, after); shape.Fill = PaletteBrush(shape.Fill, before, after); }
             for (int i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++) ApplyPalette(VisualTreeHelper.GetChild(element, i), before, after);
         }
         void ShowHelp()
         {
-            MessageBox.Show(this, "Ctrl+K  搜索全部笔记\nEnter  新增块   ·   Shift+Enter  块内换行\nTab / Shift+Tab  缩进 / 取消缩进\nAlt+↑ / ↓  移动块\nCtrl+Enter  切换任务状态\nCtrl+Z / Ctrl+Y  撤销 / 重做\n[[页面名]]  页面链接   ·   ((块 ID))  块引用\n/  打开块命令\n\n行内渲染\n**ABC你好** 会被渲染为加粗文本\n*ABC你好* 会被渲染为斜体文本\n~~ABC你好~~ 会被渲染为删除线文本\n_ABC你好_ 会被渲染为下划线文本\n==ABC你好== 会被渲染为高亮文本\n`ABC` 会被渲染为灰底代码文本\n-> / <- 会被渲染为箭头符号\n@P / @D / @T / @L 会被渲染为符号，表示人物/日期/时间/位置\n\n每日笔记从今天起连续呈现，向下滚动查看更早内容。\n自动保存到所选笔记库。冲突时保留草稿，避免覆盖磁盘改动。", "流记使用说明");
+            MessageBox.Show(this, "Ctrl+K  搜索全部笔记\nCtrl+B  收起 / 展开侧边栏\nEnter  新增块   ·   Shift+Enter  块内换行\nTab / Shift+Tab  缩进 / 取消缩进\nAlt+↑ / ↓  移动块\nCtrl+Enter  切换任务状态\nCtrl+Z / Ctrl+Y  撤销 / 重做\n[[页面名]]  页面链接   ·   ((块 ID))  块引用\n/  打开块命令\n\n行内渲染\n**ABC你好** 会被渲染为加粗文本\n*ABC你好* 会被渲染为斜体文本\n~~ABC你好~~ 会被渲染为删除线文本\n_ABC你好_ 会被渲染为下划线文本\n==ABC你好== 会被渲染为高亮文本\n`ABC` 会被渲染为灰底代码文本\n-> / <- 会被渲染为箭头符号\n@P / @D / @T / @L 会被渲染为符号，表示人物/日期/时间/位置\n\n每日笔记从今天起连续呈现，向下滚动查看更早内容。\n自动保存到所选笔记库。冲突时保留草稿，避免覆盖磁盘改动。", "流记使用说明");
         }
         void OnWindowKey(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control) { search.Focus(); search.SelectAll(); e.Handled = true; }
+            else if ((e.Key == Key.B && Keyboard.Modifiers == ModifierKeys.Control)) { ToggleSidebar(); e.Handled = true; }
             else if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control) { saveTimer.Stop(); foreach (EditState s in states.Values) if (!s.Conflict) s.Failed = false; FlushAll(); e.Handled = true; }
         }
         void OnClosing(object sender, CancelEventArgs e)

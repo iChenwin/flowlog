@@ -54,6 +54,7 @@ Logseq 桌面使用 Electron，其编辑器以 ClojureScript 实现，见官方 
 | 移动整子树 | Alt+↑ / ↓ |
 | 切换任务 | Ctrl+Enter |
 | 折叠 / 展开 | Ctrl+. |
+| 收起 / 展开侧边栏 | Ctrl+B |
 | 复制块引用 | Ctrl+Shift+C |
 | 搜索 / 重试保存 | Ctrl+K / Ctrl+S |
 | 撤销 / 重做 | Ctrl+Z / Ctrl+Y |
