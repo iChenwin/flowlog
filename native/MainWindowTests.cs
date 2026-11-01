@@ -259,6 +259,7 @@ namespace FlowLog.Native
                 Wait(delegate { return !window.IsVisible && Read(file) == final; }, "Closing waits for last pending content to reach disk");
                 window = Open(root);
                 Require(Editor(window).Text == final, "Restart restores exact saved content");
+                Require(VaultPathText(window) == disk.Root, "Restart re-displays the vault directory path in the header");
                 window.Close(); Wait(delegate { return !window.IsVisible; }, "Clean window closes without blocked save");
 
                 Note saved = disk.ListNotes().Single(delegate(Note n) { return n.Path == journal.Path; });
@@ -281,6 +282,10 @@ namespace FlowLog.Native
                 Require(disk.ListDrafts().Any(delegate(Draft d) { return d.Note.Content == latest && d.Conflict; }), "Editing during conflict immediately refreshes recovery draft");
                 Require(Read(file) == external, "Further conflicted edits still preserve external file");
                 Require(VaultStore.LoadLastRoot() == remembered, "Explicit isolated vault never changes remembered user vault");
+                MainWindow welcome = new MainWindow(Path.Combine(Path.GetTempPath(), "FlowLog-Missing-" + Guid.NewGuid().ToString("N"))) { ShowInTaskbar = false, ShowActivated = false };
+                welcome.Show(); welcome.UpdateLayout(); Pump(40);
+                try { Require(VaultPathText(welcome) == "尚未打开笔记库", "Welcome screen states that no vault is open"); }
+                finally { DisposeWindow(welcome); }
                 GenerateProductScreenshot();
                 return count;
             }

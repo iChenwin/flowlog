@@ -38,6 +38,7 @@ namespace FlowLog.Native
         readonly TextBlock status = new TextBlock();
         readonly TextBlock heading = new TextBlock();
         readonly TextBlock vaultLabel = new TextBlock();
+        readonly TextBlock vaultPath = new TextBlock();
         readonly ScrollViewer scroll = new ScrollViewer();
         readonly DispatcherTimer saveTimer = new DispatcherTimer();
         readonly DispatcherTimer searchTimer = new DispatcherTimer();
@@ -94,7 +95,7 @@ namespace FlowLog.Native
             FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI"); FontSize = 14;
             layout = new Grid(); layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
             layout.ColumnDefinitions.Add(new ColumnDefinition()); layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
-            layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(66) });
+            layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             layout.RowDefinitions.Add(new RowDefinition()); layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(29) });
             Content = layout;
             sidebar = new Border { Background = panel, BorderBrush = edge, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(16, 22, 16, 12), Child = side };
@@ -125,7 +126,17 @@ namespace FlowLog.Native
             searchHost.Children.Add(search); searchHost.Children.Add(searchHint);
             AutomationProperties.SetAutomationId(search, "SearchBox"); AutomationProperties.SetName(search, "搜索全部笔记"); search.TextChanged += delegate { searchHint.Visibility = search.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed; if (!loading) { searchTimer.Stop(); searchTimer.Start(); } }; top.Children.Add(searchHost);
             sourceButton = Button("原文", delegate { sourceMode = !sourceMode; sourceButton.Content = sourceMode ? "渲染" : "原文"; foreach (EditState s in states.Values) if (s.Editor != null) s.Editor.SourceMode = sourceMode; }); sourceButton.Margin = new Thickness(14, 0, 0, 0); sourceButton.ToolTip = "切换 Markdown 原文与大纲视图"; top.Children.Add(sourceButton);
-            topbar = new Border { Padding = new Thickness(32, 0, 20, 0), BorderBrush = edge, BorderThickness = new Thickness(0, 0, 0, 1), Background = paper, Child = top }; Grid.SetColumn(topbar, 1); Grid.SetColumnSpan(topbar, 2); layout.Children.Add(topbar);
+            Grid pathRow = new Grid { Margin = new Thickness(42, 6, 0, 0) };
+            pathRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            pathRow.ColumnDefinitions.Add(new ColumnDefinition());
+            TextBlock pathLabel = new TextBlock { Text = "笔记库", Foreground = muted, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+            vaultPath.Foreground = ink; vaultPath.FontSize = 11; vaultPath.TextTrimming = TextTrimming.CharacterEllipsis; vaultPath.VerticalAlignment = VerticalAlignment.Center;
+            vaultPath.ToolTip = "当前打开笔记库的目录路径";
+            AutomationProperties.SetAutomationId(vaultPath, "VaultPath");
+            Grid.SetColumn(pathLabel, 0); Grid.SetColumn(vaultPath, 1);
+            pathRow.Children.Add(pathLabel); pathRow.Children.Add(vaultPath);
+            StackPanel head = new StackPanel(); head.Children.Add(top); head.Children.Add(pathRow);
+            topbar = new Border { Padding = new Thickness(32, 12, 20, 10), BorderBrush = edge, BorderThickness = new Thickness(0, 0, 0, 1), Background = paper, Child = head }; Grid.SetColumn(topbar, 1); Grid.SetColumnSpan(topbar, 2); layout.Children.Add(topbar);
             stream.Margin = new Thickness(46, 25, 46, 60); AutomationProperties.SetAutomationId(stream, "JournalStream");
             scroll.Content = stream; scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto; scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled; scroll.Background = paper;
             scroll.ScrollChanged += delegate(object sender, ScrollChangedEventArgs e) { if (!loading && view == "journals" && e.VerticalChange > 0 && scroll.ScrollableHeight - scroll.VerticalOffset < 180) AppendJournals(7); };
@@ -209,9 +220,14 @@ namespace FlowLog.Native
             sidebarToggle.ToolTip = (sidebarCollapsed ? "展开侧边栏" : "收起侧边栏") + "    Ctrl+B";
             AutomationProperties.SetName(sidebarToggle, sidebarCollapsed ? "展开侧边栏" : "收起侧边栏");
         }
+        void UpdateVaultPath()
+        {
+            vaultPath.Text = store == null ? "尚未打开笔记库" : store.Root;
+            vaultPath.ToolTip = store == null ? "当前打开笔记库的目录路径" : store.Root;
+        }
         void ShowWelcome()
         {
-            stream.Children.Clear(); heading.Text = "开始记录";
+            stream.Children.Clear(); heading.Text = "开始记录"; UpdateVaultPath();
             stream.Children.Add(Label("你的笔记，留在你的电脑里。", 26, ink));
             stream.Children.Add(new TextBlock { Text = "选择一个文件夹作为笔记库。每天的事项将连续呈现，内容保存为可直接打开的 Markdown 文件。", Foreground = muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 18, 0, 20) });
             stream.Children.Add(Button("选择或创建笔记库…", ChooseVault));
@@ -243,7 +259,7 @@ namespace FlowLog.Native
                     if (disk != null) notes.Remove(disk); notes.Add(restored);
                     states[restored.Path] = new EditState { Note = restored, Pending = restored.Content, Failed = draft.Conflict, Conflict = draft.Conflict, Error = draft.Conflict ? "磁盘内容已变化，恢复的草稿未覆盖原文件" : null };
                 }
-                vaultLabel.Text = new DirectoryInfo(root).Name; vaultLabel.ToolTip = root; ShowJournals(); FlushAll();
+                vaultLabel.Text = new DirectoryInfo(root).Name; vaultLabel.ToolTip = root; UpdateVaultPath(); ShowJournals(); FlushAll();
             }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "无法打开笔记库"); if (store == null) ShowWelcome(); }
         }
