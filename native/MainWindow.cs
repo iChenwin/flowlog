@@ -252,6 +252,15 @@ namespace FlowLog.Native
             editor.TextChanged += delegate { state.Pending = editor.Text; state.Note.Content = editor.Text; if (!state.Conflict) state.Failed = false; PersistDraft(state); saveTimer.Stop(); saveTimer.Start(); UpdateStatus(); };
             editor.GotKeyboardFocus += delegate { active = note; RefreshRelated(); };
             editor.LinkRequested += delegate(object sender, LinkEventArgs e) { FollowLink(e.Title, e.IsBlockRef); };
+            editor.PreviewMouseWheel += delegate(object sender, MouseWheelEventArgs e)
+            {
+                if (scroll == null) return;
+                double offset = scroll.VerticalOffset - e.Delta;
+                if (offset < 0) offset = 0;
+                if (offset > scroll.ScrollableHeight) offset = scroll.ScrollableHeight;
+                scroll.ScrollToVerticalOffset(offset);
+                e.Handled = true;
+            };
             }
             else
             {
