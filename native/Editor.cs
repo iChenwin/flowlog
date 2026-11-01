@@ -69,7 +69,8 @@ namespace FlowLog.Native
             Options.EnableRectangularSelection = false;
             Options.EnableVirtualSpace = false;
             Options.InheritWordWrapIndentation = true;
-            TextArea.SelectionBrush = new SolidColorBrush(Color.FromArgb(85, 121, 173, 216));
+            TextArea.SelectionBrush = new SolidColorBrush(Color.FromRgb(228, 242, 255));
+            TextArea.SelectionForeground = new SolidColorBrush(Color.FromRgb(67, 63, 56));
             TextArea.SelectionCornerRadius = 2;
             presentation = new OutlinePresentationGenerator(this);
             TextArea.TextView.ElementGenerators.Add(presentation);

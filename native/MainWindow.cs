@@ -240,6 +240,8 @@ namespace FlowLog.Native
             {
             editor = new OutlineEditor();
             editor.FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI"); editor.FontSize = 16; editor.Foreground = ink; editor.Background = paper;
+            editor.TextArea.SelectionBrush = new SolidColorBrush(dark ? Color.FromRgb(51, 143, 255) : Color.FromRgb(228, 242, 255));
+            editor.TextArea.SelectionForeground = new SolidColorBrush(dark ? Colors.White : Color.FromRgb(67, 63, 56));
             editor.Padding = new Thickness(0, 5, 0, 10); editor.BorderThickness = new Thickness(0); editor.WordWrap = true; editor.MinHeight = 100;
             editor.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled; editor.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
             editor.PageTitles = notes.Select(delegate(Note n) { return n.Title; }).ToList(); editor.SourceMode = sourceMode; editor.Text = String.IsNullOrEmpty(CurrentText(note)) ? "- " : CurrentText(note);
@@ -407,7 +409,7 @@ namespace FlowLog.Native
             dark = !dark; SetPalette();
             Brush[] after = new Brush[] { ink, muted, paper, panel, edge, accent };
             ApplyPalette(this, before, after);
-            foreach (EditState s in states.Values) if (s.Editor != null) { s.Editor.Background = paper; s.Editor.Foreground = ink; s.Editor.TextArea.TextView.Redraw(); }
+            foreach (EditState s in states.Values) if (s.Editor != null) { s.Editor.Background = paper; s.Editor.Foreground = ink; s.Editor.TextArea.SelectionBrush = new SolidColorBrush(dark ? Color.FromRgb(51, 143, 255) : Color.FromRgb(228, 242, 255)); s.Editor.TextArea.SelectionForeground = new SolidColorBrush(dark ? Colors.White : Color.FromRgb(67, 63, 56)); s.Editor.TextArea.TextView.Redraw(); }
             RefreshRelated();
         }
         Brush PaletteBrush(Brush value, Brush[] before, Brush[] after)
