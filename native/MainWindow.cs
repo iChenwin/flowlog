@@ -438,7 +438,7 @@ namespace FlowLog.Native
         }
         void ShowHelp()
         {
-            MessageBox.Show(this, "Ctrl+K  搜索全部笔记\nEnter  新增块   ·   Shift+Enter  块内换行\nTab / Shift+Tab  缩进 / 取消缩进\nAlt+↑ / ↓  移动块\nCtrl+Enter  切换任务状态\nCtrl+Z / Ctrl+Y  撤销 / 重做\n[[页面名]]  页面链接   ·   ((块 ID))  块引用\n/  打开块命令\n\n行内渲染\n**ABC你好** 会被渲染为加粗文本\n*ABC你好* 会被渲染为斜体文本\n~~ABC你好~~ 会被渲染为删除线文本\n_ABC你好_ 会被渲染为下划线文本\n==ABC你好== 会被渲染为高亮文本\n`ABC` 会被渲染为灰底代码文本\n\n每日笔记从今天起连续呈现，向下滚动查看更早内容。\n自动保存到所选笔记库。冲突时保留草稿，避免覆盖磁盘改动。", "流记使用说明");
+            MessageBox.Show(this, "Ctrl+K  搜索全部笔记\nEnter  新增块   ·   Shift+Enter  块内换行\nTab / Shift+Tab  缩进 / 取消缩进\nAlt+↑ / ↓  移动块\nCtrl+Enter  切换任务状态\nCtrl+Z / Ctrl+Y  撤销 / 重做\n[[页面名]]  页面链接   ·   ((块 ID))  块引用\n/  打开块命令\n\n行内渲染\n**ABC你好** 会被渲染为加粗文本\n*ABC你好* 会被渲染为斜体文本\n~~ABC你好~~ 会被渲染为删除线文本\n_ABC你好_ 会被渲染为下划线文本\n==ABC你好== 会被渲染为高亮文本\n`ABC` 会被渲染为灰底代码文本\n-> / <- 会被渲染为箭头符号\n\n每日笔记从今天起连续呈现，向下滚动查看更早内容。\n自动保存到所选笔记库。冲突时保留草稿，避免覆盖磁盘改动。", "流记使用说明");
         }
         void OnWindowKey(object sender, KeyEventArgs e)
         {

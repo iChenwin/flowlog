@@ -39,6 +39,13 @@ namespace FlowLog.Native
         public static readonly Regex UnderlinePattern = new Regex(@"_(?!_)([^_\r\n]+)_(?!_)", RegexOptions.Compiled);
         public static readonly Regex HighlightPattern = new Regex(@"(?<!=)==([^=\r\n]+)==(?!=)", RegexOptions.Compiled);
         public static readonly Regex CodePattern = new Regex(@"`([^`\r\n]+)`", RegexOptions.Compiled);
+        public static readonly Regex RightArrowPattern = new Regex(@"->", RegexOptions.Compiled);
+        public static readonly Regex LeftArrowPattern = new Regex(@"<-", RegexOptions.Compiled);
+        public static readonly Regex ArrowPattern = new Regex(@"->|<-", RegexOptions.Compiled);
+        public static readonly Regex ArrowRightPattern = RightArrowPattern;
+        public static readonly Regex ArrowLeftPattern = LeftArrowPattern;
+        public static readonly Regex RightArrowRegex = RightArrowPattern;
+        public static readonly Regex LeftArrowRegex = LeftArrowPattern;
 
         public static List<OutlineLine> Lines(string text)
         {

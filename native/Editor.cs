@@ -719,11 +719,25 @@ namespace FlowLog.Native
             {
                 if (owner.IsCodeLine(line.LineNumber)) { line = line.NextLine; continue; }
                 string text = CurrentContext.Document.GetText(line);
-                Match match = Outline.BlockPattern.Match(text);
-                int interested = match.Success ? line.Offset + match.Groups[1].Length : -1;
+                int best = -1;
                 // Keep metadata editable when the caret is on that line.
-                if (Outline.MetadataPattern.IsMatch(text) && owner.TextArea.Caret.Line != line.LineNumber) interested = line.Offset;
-                if (interested >= startOffset) return interested;
+                if (Outline.MetadataPattern.IsMatch(text) && owner.TextArea.Caret.Line != line.LineNumber)
+                {
+                    int metaOffset = line.Offset;
+                    if (metaOffset >= startOffset && (best == -1 || metaOffset < best)) best = metaOffset;
+                }
+                Match block = Outline.BlockPattern.Match(text);
+                if (block.Success)
+                {
+                    int bulletOffset = line.Offset + block.Groups[1].Length;
+                    if (bulletOffset >= startOffset && (best == -1 || bulletOffset < best)) best = bulletOffset;
+                }
+                foreach (Match arrow in Outline.ArrowPattern.Matches(text))
+                {
+                    int arrowOffset = line.Offset + arrow.Index;
+                    if (arrowOffset >= startOffset && (best == -1 || arrowOffset < best)) best = arrowOffset;
+                }
+                if (best >= startOffset) return best;
                 line = line.NextLine;
             }
             return -1;
@@ -738,6 +752,15 @@ namespace FlowLog.Native
             Match match = Outline.BlockPattern.Match(text);
             if (match.Success && offset == line.Offset + match.Groups[1].Length)
                 return new FormattedTextElement("•  ", 2);
+            int relative = offset - line.Offset;
+            if (relative >= 0 && relative + 2 <= text.Length)
+            {
+                string pair = text.Substring(relative, 2);
+                if (pair == "->")
+                    return new FormattedTextElement("\U0001F852", 2);
+                if (pair == "<-")
+                    return new FormattedTextElement("\U0001F850", 2);
+            }
             return null;
         }
     }
