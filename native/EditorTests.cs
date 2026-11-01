@@ -261,7 +261,48 @@ namespace FlowLog.Native
                     var brush = bgField.GetValue(props) as SolidColorBrush;
                     return brush != null && brush.Color == Color.FromRgb(242, 242, 242);
                 }), "Inline code `ABC` renders with gray background");
+                Require(Outline.PersonPattern.Match("@P").Success, "PersonPattern matches @P");
+                Require(Outline.DatePattern.Match("@D").Success, "DatePattern matches @D");
+                Require(Outline.TimePattern.Match("@T").Success, "TimePattern matches @T");
+                Require(Outline.LocationPattern.Match("@L").Success, "LocationPattern matches @L");
+                editor.Text = "- @P Alice @D 2026-10-31 @T 09:30 @L here";
+                Pump(window);
+                VisualLine mentionVisual = editor.TextArea.TextView.VisualLines.First();
+                Require(IsMentionGlyph(ElementAtRelativeOffset(mentionVisual, 2)), "@P position is an emoji glyph element, not literal text");
+                Require(IsMentionGlyph(ElementAtRelativeOffset(mentionVisual, 11)), "@D position is an emoji glyph element");
+                Require(IsMentionGlyph(ElementAtRelativeOffset(mentionVisual, 25)), "@T position is an emoji glyph element");
+                Require(IsMentionGlyph(ElementAtRelativeOffset(mentionVisual, 34)), "@L position is an emoji glyph element");
+                editor.Background = new SolidColorBrush(Colors.White); Pump(window);
+                Require(CountMentionGlyphs(editor.TextArea.TextView.VisualLines.First()) == 4, "Mention emojis render on light theme");
+                editor.Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)); Pump(window);
+                Require(CountMentionGlyphs(editor.TextArea.TextView.VisualLines.First()) == 4, "Mention emojis render on dark theme");
                 return count;
+            }
+            finally { window.Close(); }
+        }
+
+        private static int CountMentionGlyphs(VisualLine line)
+        {
+            int n = 0;
+            foreach (VisualLineElement element in line.Elements)
+            {
+                if (element.RelativeTextOffset > 0 && IsMentionGlyph(element)) n++;
+            }
+            return n;
+        }
+        private static bool IsMentionGlyph(VisualLineElement element)
+        {
+            FormattedTextElement ft = element as FormattedTextElement;
+            return ft != null && ft.DocumentLength == 2 && ft.VisualLength == 1;
+        }
+        private static VisualLineElement ElementAtRelativeOffset(VisualLine line, int relOffset)
+        {
+            foreach (VisualLineElement element in line.Elements)
+                if (element.RelativeTextOffset == relOffset) return element;
+            return null;
+        }
+    }
+}
             }
             finally { window.Close(); }
         }

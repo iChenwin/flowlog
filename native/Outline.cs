@@ -46,6 +46,11 @@ namespace FlowLog.Native
         public static readonly Regex ArrowLeftPattern = LeftArrowPattern;
         public static readonly Regex RightArrowRegex = RightArrowPattern;
         public static readonly Regex LeftArrowRegex = LeftArrowPattern;
+        public static readonly Regex PersonPattern = new Regex(@"(?<!\w)@P(?!\w)", RegexOptions.Compiled);
+        public static readonly Regex DatePattern = new Regex(@"(?<!\w)@D(?!\w)", RegexOptions.Compiled);
+        public static readonly Regex TimePattern = new Regex(@"(?<!\w)@T(?!\w)", RegexOptions.Compiled);
+        public static readonly Regex LocationPattern = new Regex(@"(?<!\w)@L(?!\w)", RegexOptions.Compiled);
+        public static readonly Regex MentionPattern = new Regex(@"(?<!\w)@(?:P|D|T|L)(?!\w)", RegexOptions.Compiled);
 
         public static List<OutlineLine> Lines(string text)
         {

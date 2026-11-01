@@ -737,6 +737,11 @@ namespace FlowLog.Native
                     int arrowOffset = line.Offset + arrow.Index;
                     if (arrowOffset >= startOffset && (best == -1 || arrowOffset < best)) best = arrowOffset;
                 }
+                foreach (Match mention in Outline.MentionPattern.Matches(text))
+                {
+                    int mentionOffset = line.Offset + mention.Index;
+                    if (mentionOffset >= startOffset && (best == -1 || mentionOffset < best)) best = mentionOffset;
+                }
                 if (best >= startOffset) return best;
                 line = line.NextLine;
             }
@@ -760,6 +765,14 @@ namespace FlowLog.Native
                     return new FormattedTextElement("\U0001F852", 2);
                 if (pair == "<-")
                     return new FormattedTextElement("\U0001F850", 2);
+                if (pair == "@P")
+                    return new FormattedTextElement("\U0001F464", 2);
+                if (pair == "@D")
+                    return new FormattedTextElement("\U0001F4C5", 2);
+                if (pair == "@T")
+                    return new FormattedTextElement("\U0001F552", 2);
+                if (pair == "@L")
+                    return new FormattedTextElement("\U0001F4CD", 2);
             }
             return null;
         }
