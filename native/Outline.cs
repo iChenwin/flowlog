@@ -27,8 +27,22 @@ namespace FlowLog.Native
         public int Length { get { return End - Start; } }
     }
 
+    // A dotted sibling connector: from an expanded row's bullet to the bullet of the
+    // next row at the same indent. Leaf rows and folded rows do not start a connector.
+    public sealed class OutlineGuide
+    {
+        public int FromLine;
+        public int ToLine;
+        public int Indent;
+    }
+
     public static class Outline
     {
+        // Logseq indents block children by 29px. At 16px Segoe UI, one space is about
+        // 4.38px, so each outline level is rendered 6 spaces wide (~26.3px) to keep
+        // adjacent levels clearly separated without changing the Markdown source.
+        public const int VisualIndentSpaces = 6;
+
         public static readonly Regex BlockPattern = new Regex(@"^([ \t]*)- (.*)$", RegexOptions.Compiled);
         public static readonly Regex MetadataPattern = new Regex(@"^\s*[\w-]+::(?:\s.*)?$", RegexOptions.Compiled);
         public static readonly Regex LinkPattern = new Regex(@"\[\[([^\]\r\n]+)\]\]|\(\(([0-9a-fA-F-]{36})\)\)|(?<![\w/#])#([^\s#\[\](),.;:!?]+)", RegexOptions.Compiled);
@@ -78,6 +92,13 @@ namespace FlowLog.Native
             return count;
         }
 
+        // Visual width (in spaces) used to render one level of leading whitespace.
+        // The Markdown source keeps two spaces per level so files stay Logseq-compatible.
+        public static int DisplayIndent(string whitespace)
+        {
+            return Math.Max(1, Indentation(whitespace) / 2) * VisualIndentSpaces;
+        }
+
         public static List<OutlineBlock> Parse(string text)
         {
             List<OutlineLine> lines = Lines(text);
@@ -106,6 +127,33 @@ namespace FlowLog.Native
                 stack.Push(block);
             }
             return blocks;
+        }
+
+        // Sibling connectors for the outline. A row that owns children links its own
+        // bullet to the next row at the same indent, but only while it is expanded: the
+        // renderer drops connectors whose source row is folded. Leaf rows and last
+        // children start no connector, so plain sequences and collapsed branches stay
+        // clean. The line runs at the source row's bullet column, connecting same-level
+        // rows rather than stretching into descendants.
+        public static List<OutlineGuide> Guides(string text)
+        {
+            List<OutlineGuide> guides = new List<OutlineGuide>();
+            List<OutlineBlock> blocks = Parse(text);
+            for (int i = 0; i < blocks.Count; i++)
+            {
+                OutlineBlock block = blocks[i];
+                bool hasChildren = i + 1 < blocks.Count && blocks[i + 1].Indent > block.Indent;
+                if (!hasChildren) continue;
+                // Next sibling: skip this block's own descendants, then stop at the first
+                // row at or above this indent. A row at the same indent is the sibling;
+                // a shallower row means this block is the last child and has no sibling.
+                int j = i + 1;
+                while (j < blocks.Count && blocks[j].Indent > block.Indent) j++;
+                if (j < blocks.Count && blocks[j].Indent == block.Indent)
+                    guides.Add(new OutlineGuide { FromLine = block.Line, ToLine = blocks[j].Line, Indent = block.Indent });
+            }
+            guides.Sort(delegate(OutlineGuide a, OutlineGuide b) { return a.FromLine.CompareTo(b.FromLine); });
+            return guides;
         }
 
         // Includes the code and closing fence, but excludes an opening fence

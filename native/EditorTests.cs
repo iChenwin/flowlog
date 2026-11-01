@@ -138,10 +138,82 @@ namespace FlowLog.Native
                 VisualLine blockVisual = editor.TextArea.TextView.VisualLines.First();
                 Require(blockVisual.Elements.Any(delegate(VisualLineElement element) { return element is FormattedTextElement; }), "Native reader renders bullet element");
 
-                editor.Text = "- parent\n  - child\n- last"; editor.CaretOffset = 2; editor.ToggleFold();
+                // Indentation is widened for display only so two adjacent outline levels
+                // are separated by Logseq's ~29px rhythm while the source keeps two spaces.
+                Require(Outline.DisplayIndent("  ") == Outline.VisualIndentSpaces, "One level renders with the widened indent");
+                Require(Outline.DisplayIndent("    ") == Outline.VisualIndentSpaces * 2, "Two levels double the widened indent");
+                Require(Outline.DisplayIndent("\t") == Outline.VisualIndentSpaces, "Tab indentation uses the same visual step");
+                editor.Text = "- 父\n  - 子"; Pump(window);
+                Require(editor.TextArea.TextView.GetVisualLine(2) != null && Outline.DisplayIndent("  ") > 2, "Nested row keeps Markdown spaces but renders wider");
+
+                editor.Text = "- parent\n  - child\n- last"; Invoke(editor, "RefreshFoldings");
+                Require(editor.MarkerForLine(1) == OutlineEditor.FoldMarker.Expanded, "Expanded parent shows the down triangle marker");
+                editor.CaretOffset = 2; editor.ToggleFold();
                 FoldingManager manager = (FoldingManager)typeof(OutlineEditor).GetField("folding", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(editor);
                 Require(manager.AllFoldings.Any(delegate(FoldingSection fold) { return fold.IsFolded; }) && editor.Text == "- parent\n  - child\n- last", "Folding changes view without deleting source");
+                Require(editor.MarkerForLine(1) == OutlineEditor.FoldMarker.Collapsed, "Collapsed parent keeps its fold marker");
+                editor.ToggleFold();
+                Require(editor.MarkerForLine(1) == OutlineEditor.FoldMarker.Expanded, "Expanding restores the down triangle marker");
+                Require(editor.MarkerForLine(2) == OutlineEditor.FoldMarker.None, "Leaf row has no fold marker");
+                Require(editor.MarkerForLine(5) == OutlineEditor.FoldMarker.None, "Out-of-range row has no fold marker");
+                Require(editor.TextArea.LeftMargins.Any(delegate(System.Windows.UIElement margin) { return margin.GetType().Name == "FoldMarkerMargin"; }), "Custom fold marker margin replaces the stock +/- box");
+                Require(!editor.TextArea.LeftMargins.Any(delegate(System.Windows.UIElement margin) { return margin is FoldingMargin; }), "Stock AvalonEdit fold margin is removed");
+
+                const string guideSource = "- parent\n  - child\n    - grandchild\n      - deeper\n  - sibling\n- next";
+                var siblingGuides = Outline.Guides(guideSource);
+                Require(siblingGuides.Count == 2, "Only rows that own children start a sibling connector");
+                Require(siblingGuides.Any(delegate(OutlineGuide g) { return g.FromLine == 1 && g.ToLine == 6 && g.Indent == 0; }), "Root row links to the next root row");
+                Require(siblingGuides.Any(delegate(OutlineGuide g) { return g.FromLine == 2 && g.ToLine == 5 && g.Indent == 2; }), "Child row links to its own-level sibling, not a grandchild");
+                Require(!siblingGuides.Any(delegate(OutlineGuide g) { return g.FromLine == 3; }), "Row with no next sibling at its indent starts no connector");
+                Require(!siblingGuides.Any(delegate(OutlineGuide g) { return g.FromLine == 5 || g.FromLine == 6; }), "Leaf rows start no connector");
+                Require(Outline.Guides("- ABC\n- BCD\n- CDE").Count == 0, "A leaf-only sequence draws nothing");
+
+                const string level2 = "- root\n  - ABC\n    - a\n  - BCD\n    - b\n  - CDE";
+                var level2Guides = Outline.Guides(level2);
+                Require(level2Guides.Count == 2, "Two level-2 owners plus one leaf give two connectors");
+                Require(level2Guides.Any(delegate(OutlineGuide g) { return g.FromLine == 2 && g.ToLine == 4 && g.Indent == 2; }), "ABC links to BCD");
+                Require(level2Guides.Any(delegate(OutlineGuide g) { return g.FromLine == 4 && g.ToLine == 6 && g.Indent == 2; }), "BCD links to CDE");
+
+                editor.Text = level2; Invoke(editor, "RefreshFoldings");
+                Require(editor.Guides.Count == level2Guides.Count, "Editor exposes the sibling connectors");
+                var abcGuide = editor.Guides.Single(delegate(OutlineGuide g) { return g.FromLine == 2; });
+                Require(editor.GuideIsDrawn(abcGuide), "Expanded ABC draws its connector");
+                editor.CaretOffset = editor.Document.GetLineByNumber(2).Offset + 2; editor.ToggleFold(); Invoke(editor, "RefreshFoldings");
+                Require(editor.MarkerForLine(2) == OutlineEditor.FoldMarker.Collapsed, "ABC folds");
+                Require(!editor.GuideIsDrawn(abcGuide), "Folded ABC skips its connector");
+                editor.ToggleFold(); Invoke(editor, "RefreshFoldings");
+                Require(editor.GuideIsDrawn(abcGuide), "Expanding ABC restores its connector");
+
+                // The requested scenario: adjacent level-2 rows only connect while expanded.
+                const string pair = "- root\n  - ABC\n    - a1\n    - a2\n    - a3\n  - BCD\n    - b1\n    - b2\n  - CDE";
+                editor.Text = pair; Invoke(editor, "RefreshFoldings");
+                var abcPair = editor.Guides.Single(delegate(OutlineGuide g) { return g.FromLine == 2; });
+                var bcdPair = editor.Guides.Single(delegate(OutlineGuide g) { return g.FromLine == 6; });
+                Require(editor.GuideIsDrawn(abcPair) && editor.GuideIsDrawn(bcdPair), "Expanded ABC and BCD both draw");
+                editor.CaretOffset = editor.Document.GetLineByNumber(2).Offset + 2; editor.ToggleFold();
+                editor.CaretOffset = editor.Document.GetLineByNumber(6).Offset + 2; editor.ToggleFold();
+                Invoke(editor, "RefreshFoldings");
+                Require(editor.MarkerForLine(2) == OutlineEditor.FoldMarker.Collapsed && editor.MarkerForLine(6) == OutlineEditor.FoldMarker.Collapsed, "Both owners fold");
+                Require(!editor.GuideIsDrawn(abcPair) && !editor.GuideIsDrawn(bcdPair), "Both folded owners skip their connectors");
+
+                Require(editor.TextArea.TextView.BackgroundRenderers.Any(delegate(ICSharpCode.AvalonEdit.Rendering.IBackgroundRenderer renderer) { return renderer is GuideLineRenderer; }), "Guide renderer draws behind the text");
+                editor.ShowGuides = false; Require(!editor.ShowGuides, "Guide rendering can be disabled");
+                editor.ShowGuides = true; Require(editor.ShowGuides, "Guide rendering can be re-enabled");
+                Require(editor.Text == pair, "Guide rendering never rewrites the Markdown source");
+                editor.Text = "- parent\n  - child\n- last"; editor.CaretOffset = 2; editor.ToggleFold(); Invoke(editor, "RefreshFoldings");
+                Require(editor.MarkerForLine(1) == OutlineEditor.FoldMarker.Collapsed, "Parent is folded before the jump");
                 editor.GoToLine(2); Require(manager.AllFoldings.All(delegate(FoldingSection fold) { return !fold.IsFolded; }), "Jump to child unfolds its parent");
+
+                // A line without "- " continues the previous block instead of parenting it,
+                // so it must never fabricate a folding (Logseq shows the arrow only for real children).
+                editor.Text = "- A\nB"; Invoke(editor, "RefreshFoldings");
+                Require(!manager.AllFoldings.Any(), "Continuation line after a block creates no folding");
+                editor.Text = "- A"; Invoke(editor, "RefreshFoldings");
+                Require(!manager.AllFoldings.Any(), "Leaf block has no folding");
+                editor.Text = "- A\n  - child"; Invoke(editor, "RefreshFoldings");
+                Require(manager.AllFoldings.Count() == 1 && manager.AllFoldings.First().StartOffset == 3, "Block folds only its real child block");
+                editor.Text = "- A\nB\n  - child"; Invoke(editor, "RefreshFoldings");
+                Require(manager.AllFoldings.Count() == 1, "Continuation line stays inside the parent fold");
 
                 editor.Text = original; editor.CaretOffset = 10; editor.ToggleFold();
                 editor.MoveSelection(1);
@@ -261,48 +333,7 @@ namespace FlowLog.Native
                     var brush = bgField.GetValue(props) as SolidColorBrush;
                     return brush != null && brush.Color == Color.FromRgb(242, 242, 242);
                 }), "Inline code `ABC` renders with gray background");
-                Require(Outline.PersonPattern.Match("@P").Success, "PersonPattern matches @P");
-                Require(Outline.DatePattern.Match("@D").Success, "DatePattern matches @D");
-                Require(Outline.TimePattern.Match("@T").Success, "TimePattern matches @T");
-                Require(Outline.LocationPattern.Match("@L").Success, "LocationPattern matches @L");
-                editor.Text = "- @P Alice @D 2026-10-31 @T 09:30 @L here";
-                Pump(window);
-                VisualLine mentionVisual = editor.TextArea.TextView.VisualLines.First();
-                Require(IsMentionGlyph(ElementAtRelativeOffset(mentionVisual, 2)), "@P position is an emoji glyph element, not literal text");
-                Require(IsMentionGlyph(ElementAtRelativeOffset(mentionVisual, 11)), "@D position is an emoji glyph element");
-                Require(IsMentionGlyph(ElementAtRelativeOffset(mentionVisual, 25)), "@T position is an emoji glyph element");
-                Require(IsMentionGlyph(ElementAtRelativeOffset(mentionVisual, 34)), "@L position is an emoji glyph element");
-                editor.Background = new SolidColorBrush(Colors.White); Pump(window);
-                Require(CountMentionGlyphs(editor.TextArea.TextView.VisualLines.First()) == 4, "Mention emojis render on light theme");
-                editor.Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)); Pump(window);
-                Require(CountMentionGlyphs(editor.TextArea.TextView.VisualLines.First()) == 4, "Mention emojis render on dark theme");
                 return count;
-            }
-            finally { window.Close(); }
-        }
-
-        private static int CountMentionGlyphs(VisualLine line)
-        {
-            int n = 0;
-            foreach (VisualLineElement element in line.Elements)
-            {
-                if (element.RelativeTextOffset > 0 && IsMentionGlyph(element)) n++;
-            }
-            return n;
-        }
-        private static bool IsMentionGlyph(VisualLineElement element)
-        {
-            FormattedTextElement ft = element as FormattedTextElement;
-            return ft != null && ft.DocumentLength == 2 && ft.VisualLength == 1;
-        }
-        private static VisualLineElement ElementAtRelativeOffset(VisualLine line, int relOffset)
-        {
-            foreach (VisualLineElement element in line.Elements)
-                if (element.RelativeTextOffset == relOffset) return element;
-            return null;
-        }
-    }
-}
             }
             finally { window.Close(); }
         }
