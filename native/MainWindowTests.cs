@@ -11,6 +11,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using WpfPath = System.Windows.Shapes.Path;
 
 namespace FlowLog.Native
 {
@@ -55,9 +56,71 @@ namespace FlowLog.Native
         {
             return Descendants<TextBlock>(window).First(delegate(TextBlock b) { return AutomationProperties.GetAutomationId(b) == "SaveStatus"; }).Text;
         }
+        static string ButtonLabel(Button b)
+        {
+            string text = b.Content as string;
+            if (text != null) return text;
+            TextBlock label = Descendants<TextBlock>(b).FirstOrDefault();
+            return label == null ? "" : label.Text;
+        }
+        static Button SidebarToggle(MainWindow window)
+        {
+            return Descendants<Button>(window).FirstOrDefault(delegate(Button b) { return AutomationProperties.GetAutomationId(b) == "SidebarToggle"; });
+        }
+        static void ClickToggle(MainWindow window)
+        {
+            SidebarToggle(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); window.UpdateLayout(); Pump(25);
+        }
+        static bool HasPanelLeftIcon(MainWindow window)
+        {
+            WpfPath path = Descendants<WpfPath>(window).FirstOrDefault(delegate(WpfPath p) { return AutomationProperties.GetAutomationId(p) == "SidebarToggleIcon"; });
+            return path != null && path.Data != null && !path.Data.IsEmpty() && path.Data.Bounds.Width > 12 && path.Data.Bounds.Height > 12
+                && path.StrokeThickness >= 1.3 && path.StrokeLineJoin == PenLineJoin.Round;
+        }
+        static FrameworkElement Sidebar(MainWindow window)
+        {
+            Grid layout = window.Content as Grid;
+            Border border = layout.Children.OfType<Border>().First(delegate(Border b) { return b.Child is StackPanel && Descendants<Button>(b).Any(delegate(Button x) { return ButtonLabel(x).Contains("每日笔记"); }); });
+            return border;
+        }
+        static List<Button> SidebarButtons(MainWindow window)
+        {
+            List<Button> buttons = new List<Button>();
+            foreach (Button b in Descendants<Button>(window))
+            {
+                string label = ButtonLabel(b);
+                if (label == "每日笔记" || label == "全部页面" || label == "待办任务" || label == "新建页面" || label == "选择笔记库" || label == "切换亮暗" || label == "快捷键与说明") buttons.Add(b);
+            }
+            return buttons;
+        }
+        static string ThemeIconId(MainWindow window)
+        {
+            foreach (Button b in Descendants<Button>(window))
+            {
+                if (ButtonLabel(b) == "切换亮暗")
+                {
+                    WpfPath icon = Descendants<WpfPath>(b).FirstOrDefault();
+                    return icon == null ? "" : AutomationProperties.GetAutomationId(icon);
+                }
+            }
+            return "";
+        }
+        static string VaultPathText(MainWindow window)
+        {
+            TextBlock path = Descendants<TextBlock>(window).FirstOrDefault(delegate(TextBlock b) { return AutomationProperties.GetAutomationId(b) == "VaultPath"; });
+            return path == null ? null : path.Text;
+        }
+        static bool HeaderPathRowSitsBelowSearchRow(MainWindow window)
+        {
+            TextBox searchBox = Descendants<TextBox>(window).First(delegate(TextBox b) { return AutomationProperties.GetAutomationId(b) == "SearchBox"; });
+            TextBlock path = Descendants<TextBlock>(window).First(delegate(TextBlock b) { return AutomationProperties.GetAutomationId(b) == "VaultPath"; });
+            Point searchAt = searchBox.TranslatePoint(new Point(0, 0), window);
+            Point pathAt = path.TranslatePoint(new Point(0, 0), window);
+            return pathAt.Y >= searchAt.Y + searchBox.ActualHeight && searchBox.IsVisible && path.IsVisible;
+        }
         static void Click(MainWindow window, string content)
         {
-            Button button = Descendants<Button>(window).First(delegate(Button b) { return Convert.ToString(b.Content).Contains(content); });
+            Button button = Descendants<Button>(window).First(delegate(Button b) { return ButtonLabel(b).Contains(content); });
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); window.UpdateLayout(); Pump(25);
         }
         static void DisposeWindow(MainWindow window)
@@ -101,7 +164,8 @@ namespace FlowLog.Native
                 Note plan = VaultStore.CreatePage("项目计划"); demo.Save(plan, "- 从 [[" + today.Title + "]] 的事项开始\n- 围绕日常记录迭代编辑体验", "");
                 window = Open(root);
                 Screenshot(window, Path.Combine(project, "docs", "native-screenshot.png"));
-                Click(window, "切换明暗");
+                Click(window, "切换亮暗");
+                Require(ThemeIconId(window) == "SidebarIcon_dark", "Dark theme shows the moon icon");
                 Screenshot(window, Path.Combine(native, "TestResults", "native-dark.png"));
                 OutlineEditor editor = Editor(window);
                 SolidColorBrush foreground = editor.Foreground as SolidColorBrush;
@@ -147,6 +211,31 @@ namespace FlowLog.Native
             {
                 window = Open(root); OutlineEditor first = Editor(window);
                 Require(Descendants<OutlineEditor>(window).Count() == 7, "Journal stream initially mounts seven native daily editors");
+                Require(SidebarToggle(window) != null, "Header row exposes a sidebar collapse button");
+                Require(HasPanelLeftIcon(window), "Sidebar toggle renders the panel-left icon");
+                Require(Sidebar(window).IsVisible, "Sidebar starts expanded");
+                Require(ThemeIconId(window) == "SidebarIcon_light", "Light theme shows the sun icon");
+                List<Button> sidebar = SidebarButtons(window);
+                Require(sidebar.Count == 7, "Sidebar exposes seven icon buttons");
+                double labelLeft = -1;
+                foreach (Button b in sidebar)
+                {
+                    TextBlock label = Descendants<TextBlock>(b).FirstOrDefault();
+                    WpfPath icon = Descendants<WpfPath>(b).FirstOrDefault();
+                    Require(label != null && icon != null && icon.Data != null && !icon.Data.IsEmpty() && icon.StrokeThickness >= 1.3, "Sidebar buttons pair a 16px vector icon with a text label");
+                    double x = label.TransformToAncestor(window).Transform(new Point(0, 0)).X;
+                    if (labelLeft < 0) labelLeft = x; else Require(Math.Abs(x - labelLeft) < 0.5, "Sidebar labels share one left edge");
+                }
+                Require(AutomationProperties.GetName(SidebarToggle(window)) == "收起侧边栏", "Expanded toggle advertises the collapse action");
+                ClickToggle(window);
+                Require(!Sidebar(window).IsVisible, "Clicking the header toggle collapses the sidebar");
+                Require(HasPanelLeftIcon(window), "Collapsed toggle keeps the panel-left icon");
+                Require(AutomationProperties.GetName(SidebarToggle(window)) == "展开侧边栏", "Collapsed toggle advertises the expand action");
+                ClickToggle(window);
+                Require(Sidebar(window).IsVisible, "Clicking again restores the sidebar");
+                Require(AutomationProperties.GetName(SidebarToggle(window)) == "收起侧边栏", "Restored toggle advertises the collapse action");
+                Require(VaultPathText(window) == disk.Root, "Header shows the exact opened vault directory path");
+                Require(HeaderPathRowSitsBelowSearchRow(window), "Vault path row renders on its own line under the heading and search row");
                 Require(!File.Exists(file), "Opening empty vault does not falsely save placeholder");
                 Require(first.Text == "- ", "New journal exposes editable outline block");
                 first.CaretOffset = first.Text.Length; first.TextArea.PerformTextInput("Alpha 中文");
