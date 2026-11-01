@@ -34,7 +34,11 @@ namespace FlowLog.Native
         }
 
         public static string DefaultRoot() { return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "FlowLog"); }
-        private static string AppRoot() { return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlowLogNative"); }
+        private static string AppRoot() {
+            string overrideRoot = Environment.GetEnvironmentVariable("FLOWLOG_APP_DATA");
+            if (!String.IsNullOrWhiteSpace(overrideRoot)) return System.IO.Path.GetFullPath(overrideRoot);
+            return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlowLogNative");
+        }
         public static string LoadLastRoot()
         {
             string file = System.IO.Path.Combine(AppRoot(), "last-vault.txt");
@@ -232,7 +236,10 @@ namespace FlowLog.Native
             {
                 using (FileStream stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { stream.Write(bytes, 0, bytes.Length); stream.Flush(true); }
                 CheckReparse(path);
-                if (File.Exists(path)) File.Replace(temp, path, null); else File.Move(temp, path);
+                if (File.Exists(path)) {
+                    try { File.Replace(temp, path, null); }
+                    catch { File.Delete(path); File.Move(temp, path); }
+                } else File.Move(temp, path);
             }
             finally { if (File.Exists(temp)) File.Delete(temp); }
         }
