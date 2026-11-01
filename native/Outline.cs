@@ -33,6 +33,12 @@ namespace FlowLog.Native
         public static readonly Regex MetadataPattern = new Regex(@"^\s*[\w-]+::(?:\s.*)?$", RegexOptions.Compiled);
         public static readonly Regex LinkPattern = new Regex(@"\[\[([^\]\r\n]+)\]\]|\(\(([0-9a-fA-F-]{36})\)\)|(?<![\w/#])#([^\s#\[\](),.;:!?]+)", RegexOptions.Compiled);
         public static readonly Regex IdPattern = new Regex(@"^\s*id::\s*([0-9a-fA-F-]{36})\s*$", RegexOptions.Compiled | RegexOptions.Multiline);
+        public static readonly Regex BoldPattern = new Regex(@"\*\*([^\*\r\n]+)\*\*", RegexOptions.Compiled);
+        public static readonly Regex ItalicPattern = new Regex(@"(?<!\*)\*([^\*\r\n]+)\*(?!\*)", RegexOptions.Compiled);
+        public static readonly Regex StrikethroughPattern = new Regex(@"~~([^\~\r\n]+)~~", RegexOptions.Compiled);
+        public static readonly Regex UnderlinePattern = new Regex(@"_(?!_)([^_\r\n]+)_(?!_)", RegexOptions.Compiled);
+        public static readonly Regex HighlightPattern = new Regex(@"(?<!=)==([^=\r\n]+)==(?!=)", RegexOptions.Compiled);
+        public static readonly Regex CodePattern = new Regex(@"`([^`\r\n]+)`", RegexOptions.Compiled);
 
         public static List<OutlineLine> Lines(string text)
         {

@@ -195,6 +195,72 @@ namespace FlowLog.Native
                 editor.Undo(); Require(editor.Text == "- 中文甲\n- 中文乙", "Native cross-block replace uses Avalon undo stack");
                 editor.SourceMode = true; Pump(window); editor.SourceMode = false; Pump(window);
                 Require(editor.Text == "- 中文甲\n- 中文乙", "Reader/source mode switching is lossless");
+
+                Require(Outline.BoldPattern.Match("**ABC**").Success && Outline.BoldPattern.Match("**ABC**").Groups[1].Value == "ABC", "BoldPattern matches **ABC** and captures ABC");
+                Require(!Outline.BoldPattern.Match("*ABC*").Success, "BoldPattern rejects single-asterisk emphasis");
+                editor.Text = "- **ABC**";
+                Pump(window);
+                VisualLine boldVisual = editor.TextArea.TextView.VisualLines.First();
+                Require(boldVisual.Elements.Any(delegate(VisualLineElement element)
+                {
+                    return element.TextRunProperties.Typeface.Weight == FontWeights.Bold;
+                }), "Inline bold **ABC** renders with bold weight");
+                Require(Outline.ItalicPattern.Match("*ABC*").Success && Outline.ItalicPattern.Match("*ABC*").Groups[1].Value == "ABC", "ItalicPattern matches *ABC* and captures ABC");
+                Require(!Outline.ItalicPattern.Match("**ABC**").Success, "ItalicPattern rejects bold **ABC**");
+                editor.Text = "- *ABC*";
+                Pump(window);
+                VisualLine italicVisual = editor.TextArea.TextView.VisualLines.First();
+                Require(italicVisual.Elements.Any(delegate(VisualLineElement element)
+                {
+                    return element.TextRunProperties.Typeface.Style == FontStyles.Italic;
+                }), "Inline italic *ABC* renders with italic style");
+
+                Require(Outline.StrikethroughPattern.Match("~~ABC~~").Success && Outline.StrikethroughPattern.Match("~~ABC~~").Groups[1].Value == "ABC", "StrikethroughPattern matches ~~ABC~~ and captures ABC");
+                Require(!Outline.StrikethroughPattern.Match("~ABC~").Success, "StrikethroughPattern rejects single-tilde emphasis");
+                editor.Text = "- ~~ABC~~";
+                Pump(window);
+                VisualLine strikeVisual = editor.TextArea.TextView.VisualLines.First();
+                Require(strikeVisual.Elements.Any(delegate(VisualLineElement element)
+                {
+                    return element.TextRunProperties.TextDecorations == TextDecorations.Strikethrough;
+                }), "Inline strikethrough ~~ABC~~ renders with strikethrough decoration");
+
+                Require(Outline.UnderlinePattern.Match("_ABC_").Success && Outline.UnderlinePattern.Match("_ABC_").Groups[1].Value == "ABC", "UnderlinePattern matches _ABC_ and captures ABC");
+                Require(!Outline.UnderlinePattern.Match("__ABC__").Success, "UnderlinePattern rejects double-underscore emphasis");
+                editor.Text = "- _ABC_";
+                Pump(window);
+                VisualLine underlineVisual = editor.TextArea.TextView.VisualLines.First();
+                Require(underlineVisual.Elements.Any(delegate(VisualLineElement element)
+                {
+                    return element.TextRunProperties.TextDecorations == TextDecorations.Underline;
+                }), "Inline underline _ABC_ renders with underline decoration");
+
+                Require(Outline.HighlightPattern.Match("==ABC==").Success && Outline.HighlightPattern.Match("==ABC==").Groups[1].Value == "ABC", "HighlightPattern matches ==ABC== and captures ABC");
+                Require(!Outline.HighlightPattern.Match("===ABC===").Success, "HighlightPattern rejects triple-equals emphasis");
+                editor.Text = "- ==ABC==";
+                Pump(window);
+                VisualLine highlightVisual = editor.TextArea.TextView.VisualLines.First();
+                Require(highlightVisual.Elements.Any(delegate(VisualLineElement element)
+                {
+                    var props = element.TextRunProperties;
+                    var bgField = props.GetType().GetField("backgroundBrush", BindingFlags.Instance | BindingFlags.NonPublic);
+                    if (bgField == null) return false;
+                    var brush = bgField.GetValue(props) as SolidColorBrush;
+                    return brush != null && brush.Color == Colors.Yellow;
+                }), "Inline highlight ==ABC== renders with yellow background");
+                Require(Outline.CodePattern.Match("`ABC`").Success && Outline.CodePattern.Match("`ABC`").Groups[1].Value == "ABC", "CodePattern matches `ABC` and captures ABC");
+                Require(!Outline.CodePattern.Match("`").Success, "CodePattern rejects lone backtick");
+                editor.Text = "- `ABC`";
+                Pump(window);
+                VisualLine codeVisual = editor.TextArea.TextView.VisualLines.First();
+                Require(codeVisual.Elements.Any(delegate(VisualLineElement element)
+                {
+                    var props = element.TextRunProperties;
+                    var bgField = props.GetType().GetField("backgroundBrush", BindingFlags.Instance | BindingFlags.NonPublic);
+                    if (bgField == null) return false;
+                    var brush = bgField.GetValue(props) as SolidColorBrush;
+                    return brush != null && brush.Color == Color.FromRgb(242, 242, 242);
+                }), "Inline code `ABC` renders with gray background");
                 return count;
             }
             finally { window.Close(); }

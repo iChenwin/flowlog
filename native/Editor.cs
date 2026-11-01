@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -749,6 +750,8 @@ namespace FlowLog.Native
         private static readonly Brush muted = new SolidColorBrush(Color.FromRgb(100, 100, 100));
         private static readonly Brush darkLink = new SolidColorBrush(Color.FromRgb(138, 187, 187));
         private static readonly Brush darkMuted = new SolidColorBrush(Color.FromRgb(147, 161, 161));
+        private static readonly Brush highlight = new SolidColorBrush(Color.FromRgb(255, 255, 0));
+        private static readonly Brush codeBackground = new SolidColorBrush(Color.FromRgb(242, 242, 242));
         protected override void ColorizeLine(DocumentLine line)
         {
             string text = CurrentContext.Document.GetText(line);
@@ -768,6 +771,45 @@ namespace FlowLog.Native
             foreach (Match match in Outline.LinkPattern.Matches(text))
                 ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
                     delegate(VisualLineElement element) { element.TextRunProperties.SetForegroundBrush(linkBrush); });
+            foreach (Match match in Outline.BoldPattern.Matches(text))
+                ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
+                    delegate(VisualLineElement element) { element.TextRunProperties.SetTypeface(new Typeface(element.TextRunProperties.Typeface.FontFamily, FontStyles.Normal, FontWeights.Bold, FontStretches.Normal)); });
+            foreach (Match match in Outline.ItalicPattern.Matches(text))
+                ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
+                    delegate(VisualLineElement element) { element.TextRunProperties.SetTypeface(new Typeface(element.TextRunProperties.Typeface.FontFamily, FontStyles.Italic, element.TextRunProperties.Typeface.Weight, FontStretches.Normal)); });
+            foreach (Match match in Outline.StrikethroughPattern.Matches(text))
+                ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
+                    delegate(VisualLineElement element) {
+                        var props = element.TextRunProperties;
+                        var tdField = props.GetType().GetField("textDecorations", BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (tdField != null)
+                            tdField.SetValue(props, TextDecorations.Strikethrough);
+                    });
+            foreach (Match match in Outline.UnderlinePattern.Matches(text))
+                ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
+                    delegate(VisualLineElement element) {
+                        var props = element.TextRunProperties;
+                        var tdField = props.GetType().GetField("textDecorations", BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (tdField != null)
+                            tdField.SetValue(props, TextDecorations.Underline);
+                    });
+            foreach (Match match in Outline.HighlightPattern.Matches(text))
+                ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
+                    delegate(VisualLineElement element) {
+                        var props = element.TextRunProperties;
+                        var bgField = props.GetType().GetField("backgroundBrush", BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (bgField != null)
+                            bgField.SetValue(props, highlight);
+                    });
+            foreach (Match match in Outline.CodePattern.Matches(text))
+                ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
+                    delegate(VisualLineElement element) {
+                        var props = element.TextRunProperties;
+                        var bgField = props.GetType().GetField("backgroundBrush", BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (bgField != null)
+                            bgField.SetValue(props, codeBackground);
+                    });
+
             Match task = Regex.Match(text, @"^[ \t]*- (TODO|DOING|DONE)\b");
             if (task.Success)
             {
