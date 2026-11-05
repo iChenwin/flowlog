@@ -13,6 +13,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using WpfPath = System.Windows.Shapes.Path;
+using WpfShape = System.Windows.Shapes.Shape;
 
 namespace FlowLog.Native
 {
@@ -36,17 +38,19 @@ namespace FlowLog.Native
         readonly TextBlock status = new TextBlock();
         readonly TextBlock heading = new TextBlock();
         readonly TextBlock vaultLabel = new TextBlock();
+        readonly TextBlock vaultPath = new TextBlock();
         readonly ScrollViewer scroll = new ScrollViewer();
         readonly DispatcherTimer saveTimer = new DispatcherTimer();
         readonly DispatcherTimer searchTimer = new DispatcherTimer();
         readonly DispatcherTimer closeTimer = new DispatcherTimer();
         Grid layout;
         Border sidebar, rightbar, topbar;
+        Button sidebarToggle, themeButton, sourceButton;
         Brush ink, muted, paper, panel, edge, accent;
         string view = "journals";
         Note active;
         int journalCount = 7;
-        bool dark, sourceMode, closingRequested, closeAllowed, loading;
+        bool dark, sourceMode, sidebarCollapsed, closingRequested, closeAllowed, loading;
 
         public MainWindow(string rootOverride = null)
         {
@@ -73,9 +77,9 @@ namespace FlowLog.Native
 
         void SetPalette()
         {
-            ink = B(dark ? "#E5E8EB" : "#26343B"); muted = B(dark ? "#A1AEB7" : "#72818B");
-            paper = B(dark ? "#20262B" : "#FFFFFF"); panel = B(dark ? "#192025" : "#F4F6F7");
-            edge = B(dark ? "#39444C" : "#E6EBEE"); accent = B(dark ? "#6DD4C3" : "#117E74");
+            ink = B(dark ? "#A4B5B6" : "#433F38"); muted = B(dark ? "#93A1A1" : "#646464");
+            paper = B(dark ? "#002B36" : "#FFFFFF"); panel = B(dark ? "#023643" : "#F7F7F7");
+            edge = B(dark ? "#0E5263" : "#CCCCCC"); accent = B(dark ? "#8ABBBB" : "#106BA3");
             Background = paper; Foreground = ink;
         }
         static Brush B(string value) { return (Brush)new BrushConverter().ConvertFromString(value); }
@@ -91,31 +95,48 @@ namespace FlowLog.Native
             FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI"); FontSize = 14;
             layout = new Grid(); layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
             layout.ColumnDefinitions.Add(new ColumnDefinition()); layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
-            layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(66) });
+            layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             layout.RowDefinitions.Add(new RowDefinition()); layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(29) });
             Content = layout;
             sidebar = new Border { Background = panel, BorderBrush = edge, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(16, 22, 16, 12), Child = side };
             Grid.SetRowSpan(sidebar, 3); layout.Children.Add(sidebar);
             side.Children.Add(Label("流记", 25, ink));
             side.Children.Add(new TextBlock { Text = "FLOWLOG", FontSize = 10, Foreground = muted, Margin = new Thickness(2, 2, 0, 30) });
-            side.Children.Add(Button("◷   每日笔记", ShowJournals));
-            side.Children.Add(Button("▤   全部页面", ShowPages));
-            side.Children.Add(Button("☑   待办任务", ShowTasks));
+            side.Children.Add(SidebarButton("每日笔记", "clock", ShowJournals));
+            side.Children.Add(SidebarButton("全部页面", "pages", ShowPages));
+            side.Children.Add(SidebarButton("待办任务", "tasks", ShowTasks));
             side.Children.Add(new Border { Height = 1, Background = edge, Margin = new Thickness(0, 18, 0, 15) });
-            side.Children.Add(Button("＋   新建页面", CreatePage));
-            side.Children.Add(Button("⌂   选择笔记库", ChooseVault));
+            side.Children.Add(SidebarButton("新建页面", "plus", CreatePage));
+            side.Children.Add(SidebarButton("选择笔记库", "folder", ChooseVault));
             vaultLabel.Foreground = muted; vaultLabel.FontSize = 11; vaultLabel.TextWrapping = TextWrapping.Wrap; vaultLabel.Margin = new Thickness(12, 6, 4, 22); side.Children.Add(vaultLabel);
-            side.Children.Add(Button("◐   切换明暗", ToggleTheme));
-            side.Children.Add(Button("?   快捷键与说明", ShowHelp));
+            themeButton = SidebarButton("切换亮暗", dark ? "dark" : "light", ToggleTheme); side.Children.Add(themeButton);
+            side.Children.Add(SidebarButton("快捷键与说明", "help", ShowHelp));
             StackPanel top = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            sidebarToggle = Button("", delegate { ToggleSidebar(); });
+            sidebarToggle.Content = PanelLeftIcon();
+            sidebarToggle.Width = 30; sidebarToggle.Padding = new Thickness(0); sidebarToggle.Margin = new Thickness(0, 0, 12, 0);
+            sidebarToggle.HorizontalContentAlignment = HorizontalAlignment.Center; sidebarToggle.VerticalContentAlignment = VerticalAlignment.Center;
+            sidebarToggle.ToolTip = "收起侧边栏    Ctrl+B"; sidebarToggle.IsTabStop = true;
+            AutomationProperties.SetAutomationId(sidebarToggle, "SidebarToggle"); AutomationProperties.SetName(sidebarToggle, "收起侧边栏");
+            top.Children.Add(sidebarToggle);
             heading.Text = "每日笔记"; heading.FontSize = 18; heading.FontWeight = FontWeights.SemiBold; heading.Foreground = ink; heading.Margin = new Thickness(0, 0, 26, 0); heading.VerticalAlignment = VerticalAlignment.Center; top.Children.Add(heading);
             search.Width = 220; search.Padding = new Thickness(10, 6, 10, 6); search.FontSize = 13; search.Background = panel; search.Foreground = ink; search.BorderBrush = edge; search.ToolTip = "搜索全部笔记 · Ctrl+K";
             Grid searchHost = new Grid { Width = 220 };
             TextBlock searchHint = new TextBlock { Text = "搜索笔记   Ctrl+K", Foreground = muted, FontSize = 12, Margin = new Thickness(11, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
             searchHost.Children.Add(search); searchHost.Children.Add(searchHint);
             AutomationProperties.SetAutomationId(search, "SearchBox"); AutomationProperties.SetName(search, "搜索全部笔记"); search.TextChanged += delegate { searchHint.Visibility = search.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed; if (!loading) { searchTimer.Stop(); searchTimer.Start(); } }; top.Children.Add(searchHost);
-            Button raw = Button("原文", delegate { sourceMode = !sourceMode; foreach (EditState s in states.Values) if (s.Editor != null) s.Editor.SourceMode = sourceMode; }); raw.Margin = new Thickness(14, 0, 0, 0); raw.ToolTip = "切换 Markdown 原文与大纲视图"; top.Children.Add(raw);
-            topbar = new Border { Padding = new Thickness(32, 0, 20, 0), BorderBrush = edge, BorderThickness = new Thickness(0, 0, 0, 1), Background = paper, Child = top }; Grid.SetColumn(topbar, 1); Grid.SetColumnSpan(topbar, 2); layout.Children.Add(topbar);
+            sourceButton = Button("原文", delegate { sourceMode = !sourceMode; sourceButton.Content = sourceMode ? "渲染" : "原文"; foreach (EditState s in states.Values) if (s.Editor != null) s.Editor.SourceMode = sourceMode; }); sourceButton.Margin = new Thickness(14, 0, 0, 0); sourceButton.ToolTip = "切换 Markdown 原文与大纲视图"; top.Children.Add(sourceButton);
+            Grid pathRow = new Grid { Margin = new Thickness(42, 6, 0, 0) };
+            pathRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            pathRow.ColumnDefinitions.Add(new ColumnDefinition());
+            TextBlock pathLabel = new TextBlock { Text = "笔记库", Foreground = muted, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+            vaultPath.Foreground = ink; vaultPath.FontSize = 11; vaultPath.TextTrimming = TextTrimming.CharacterEllipsis; vaultPath.VerticalAlignment = VerticalAlignment.Center;
+            vaultPath.ToolTip = "当前打开笔记库的目录路径";
+            AutomationProperties.SetAutomationId(vaultPath, "VaultPath");
+            Grid.SetColumn(pathLabel, 0); Grid.SetColumn(vaultPath, 1);
+            pathRow.Children.Add(pathLabel); pathRow.Children.Add(vaultPath);
+            StackPanel head = new StackPanel(); head.Children.Add(top); head.Children.Add(pathRow);
+            topbar = new Border { Padding = new Thickness(32, 12, 20, 10), BorderBrush = edge, BorderThickness = new Thickness(0, 0, 0, 1), Background = paper, Child = head }; Grid.SetColumn(topbar, 1); Grid.SetColumnSpan(topbar, 2); layout.Children.Add(topbar);
             stream.Margin = new Thickness(46, 25, 46, 60); AutomationProperties.SetAutomationId(stream, "JournalStream");
             scroll.Content = stream; scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto; scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled; scroll.Background = paper;
             scroll.ScrollChanged += delegate(object sender, ScrollChangedEventArgs e) { if (!loading && view == "journals" && e.VerticalChange > 0 && scroll.ScrollableHeight - scroll.VerticalOffset < 180) AppendJournals(7); };
@@ -125,9 +146,88 @@ namespace FlowLog.Native
             status.Foreground = muted; status.FontSize = 11; status.Margin = new Thickness(15, 5, 0, 0); AutomationProperties.SetAutomationId(status, "SaveStatus");
             Border footer = new Border { Background = panel, BorderBrush = edge, BorderThickness = new Thickness(0, 1, 0, 0), Child = status }; Grid.SetRow(footer, 2); Grid.SetColumn(footer, 1); Grid.SetColumnSpan(footer, 2); layout.Children.Add(footer);
         }
+        // 16px outline icons adapted from DeepSeek Harness's product icon set.
+        // A 1.5px rounded stroke matches the weight and soft terminals of the text.
+        FrameworkElement IconView(string data, string automationId)
+        {
+            WpfPath path = new WpfPath
+            {
+                Data = Geometry.Parse(data),
+                Stroke = ink,
+                StrokeThickness = 1.5,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round,
+                Fill = Brushes.Transparent,
+            };
+            AutomationProperties.SetAutomationId(path, automationId);
+            Canvas canvas = new Canvas { Width = 16, Height = 16 };
+            canvas.Children.Add(path);
+            return new Viewbox { Width = 16, Height = 16, Child = canvas };
+        }
+        FrameworkElement PanelLeftIcon()
+        { return IconView("M13.5 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z M5.5 1.5V14.5", "SidebarToggleIcon"); }
+        string SidebarIconData(string key)
+        {
+            switch (key)
+            {
+                case "clock": return "M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z M8 4.31V8.46L11 10.08";
+                case "pages": return "M6.15479 4.91687H9.84543 M11.8798 9.55347V2.71525C11.8798 2.37416 11.564 2.09766 11.1744 2.09766H4.82577C4.43618 2.09766 4.12036 2.37416 4.12036 2.71525V9.55347 M2.28735 13.8022V8.84792C2.28735 8.77514 2.36262 8.72673 2.42884 8.75693L13.2936 13.7112C13.3914 13.7558 13.3596 13.9022 13.2521 13.9022H2.38735C2.33213 13.9022 2.28735 13.8575 2.28735 13.8022Z M7.46929 10.979L13.5783 8.7416C13.6435 8.7177 13.7126 8.76601 13.7126 8.83551L13.7125 13.8022C13.7125 13.8574 13.6678 13.9022 13.6125 13.9022H7.99999 M6.15479 7.2395H9.05644";
+                case "tasks": return "M3.75 6.25C4.7165 6.25 5.5 5.4665 5.5 4.5C5.5 3.5335 4.7165 2.75 3.75 2.75C2.7835 2.75 2 3.5335 2 4.5C2 5.4665 2.7835 6.25 3.75 6.25Z M7.5 4.5H13.5 M3.75 13.25C4.7165 13.25 5.5 12.4665 5.5 11.5C5.5 10.5335 4.7165 9.75 3.75 9.75C2.7835 9.75 2 10.5335 2 11.5C2 12.4665 2.7835 13.25 3.75 13.25Z M7.5 11.5H13.5";
+                case "plus": return "M8 2V14 M2 8H14";
+                case "folder": return "M1.50439 3.11059C1.50439 2.55831 1.95211 2.1106 2.50439 2.1106H5.43389C5.67773 2.1106 5.91318 2.19969 6.09593 2.36113L7.71649 3.79265C7.89924 3.95409 8.1347 4.04319 8.3785 4.04319H13.4958C14.0481 4.04319 14.4958 4.4909 14.4958 5.04319V12.8894C14.4958 13.4417 14.0481 13.8894 13.4958 13.8894H2.50439C1.95211 13.8894 1.50439 13.4417 1.50439 12.8894V4.04319V3.11059Z M3.63501 7.66614H12.3647";
+                case "light": return "M8.00007 11.8117C10.1052 11.8117 11.8117 10.1052 11.8117 8.00007C11.8117 5.89499 10.1052 4.18848 8.00007 4.18848C5.89499 4.18848 4.18848 5.89499 4.18848 8.00007C4.18848 10.1052 5.89499 11.8117 8.00007 11.8117Z M13.3899 8H15.1499 M11.8115 11.8115L13.0556 13.0556 M8 13.3901V15.1501 M4.18868 11.8115L2.94458 13.0556 M2.6101 8H0.850098 M4.18868 4.18856L2.94458 2.94446 M8 2.6101V0.850098 M11.8115 4.18856L13.0556 2.94446";
+                case "dark": return "M14.1127 8.70663C14.2576 8.60602 14.4627 8.71355 14.4386 8.88834C14.2901 9.96567 13.8731 10.9912 13.2229 11.8692C12.479 12.8735 11.4613 13.6421 10.2917 14.0829C9.1222 14.5236 7.85038 14.6179 6.62865 14.3543C5.40692 14.0907 4.28709 13.4805 3.40332 12.5967C2.51955 11.7129 1.90931 10.5931 1.64572 9.37135C1.38212 8.14962 1.47635 6.87779 1.91711 5.70825C2.35787 4.5387 3.12647 3.52103 4.13083 2.77714C5.00878 2.12689 6.03433 1.70994 7.11166 1.5614C7.28645 1.5373 7.39397 1.74238 7.29337 1.88734C6.68703 2.76099 6.37885 3.81241 6.42313 4.88345C6.47392 6.11194 6.98471 7.27645 7.85413 8.14587C8.72355 9.01529 9.88805 9.52608 11.1166 9.57687C12.1876 9.62114 13.239 9.31296 14.1127 8.70663Z";
+                case "help": return "M8 14.5C11.5899 14.5 14.5 11.5899 14.5 8C14.5 4.41015 11.5899 1.5 8 1.5C4.41015 1.5 1.5 4.41015 1.5 8C1.5 11.5899 4.41015 14.5 8 14.5Z M5.75 6.69646C5.75 6.29865 5.88196 5.90976 6.12919 5.57899C6.37643 5.24821 6.72783 4.99041 7.13896 4.83817C7.5501 4.68593 8.0025 4.6461 8.43895 4.72371C8.87541 4.80132 9.27632 4.99289 9.59099 5.27419C9.90566 5.55549 10.12 5.91388 10.2068 6.30406C10.2936 6.69423 10.249 7.09866 10.0787 7.4662C9.90843 7.83373 9.62004 8.14787 9.25003 8.36889C9.19476 8.4019 9.13803 8.43262 9.08004 8.46099C8.52566 8.73217 8 9.20817 8 9.82532 M8 10.7416V11.7416";
+                default: return "M8 2V14 M2 8H14";
+            }
+        }
+        Button SidebarButton(string label, string iconKey, Action action)
+        {
+            Button b = Button("", action);
+            StackPanel content = new StackPanel { Orientation = Orientation.Horizontal };
+            FrameworkElement icon = IconView(SidebarIconData(iconKey), "SidebarIcon_" + iconKey);
+            icon.Margin = new Thickness(0, 0, 10, 0); icon.VerticalAlignment = VerticalAlignment.Center;
+            content.Children.Add(icon);
+            content.Children.Add(new TextBlock { Text = label, Foreground = ink, FontSize = 14, VerticalAlignment = VerticalAlignment.Center });
+            b.Content = content; b.VerticalContentAlignment = VerticalAlignment.Center;
+            return b;
+        }
+        void UpdateThemeButton()
+        {
+            if (themeButton == null) return;
+            StackPanel content = new StackPanel { Orientation = Orientation.Horizontal };
+            FrameworkElement icon = IconView(SidebarIconData(dark ? "dark" : "light"), "SidebarIcon_" + (dark ? "dark" : "light"));
+            icon.Margin = new Thickness(0, 0, 10, 0); icon.VerticalAlignment = VerticalAlignment.Center;
+            content.Children.Add(icon);
+            content.Children.Add(new TextBlock { Text = "切换亮暗", Foreground = ink, FontSize = 14, VerticalAlignment = VerticalAlignment.Center });
+            themeButton.Content = content;
+            themeButton.VerticalContentAlignment = VerticalAlignment.Center;
+        }
+        void ToggleSidebar()
+        {
+            sidebarCollapsed = !sidebarCollapsed;
+            if (sidebarCollapsed)
+            {
+                sidebar.Visibility = Visibility.Collapsed;
+                layout.ColumnDefinitions[0].Width = new GridLength(0);
+            }
+            else
+            {
+                sidebar.Visibility = Visibility.Visible;
+                layout.ColumnDefinitions[0].Width = new GridLength(200);
+            }
+            sidebarToggle.ToolTip = (sidebarCollapsed ? "展开侧边栏" : "收起侧边栏") + "    Ctrl+B";
+            AutomationProperties.SetName(sidebarToggle, sidebarCollapsed ? "展开侧边栏" : "收起侧边栏");
+        }
+        void UpdateVaultPath()
+        {
+            vaultPath.Text = store == null ? "尚未打开笔记库" : store.Root;
+            vaultPath.ToolTip = store == null ? "当前打开笔记库的目录路径" : store.Root;
+        }
         void ShowWelcome()
         {
-            stream.Children.Clear(); heading.Text = "开始记录";
+            stream.Children.Clear(); heading.Text = "开始记录"; UpdateVaultPath();
             stream.Children.Add(Label("你的笔记，留在你的电脑里。", 26, ink));
             stream.Children.Add(new TextBlock { Text = "选择一个文件夹作为笔记库。每天的事项将连续呈现，内容保存为可直接打开的 Markdown 文件。", Foreground = muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 18, 0, 20) });
             stream.Children.Add(Button("选择或创建笔记库…", ChooseVault));
@@ -159,7 +259,7 @@ namespace FlowLog.Native
                     if (disk != null) notes.Remove(disk); notes.Add(restored);
                     states[restored.Path] = new EditState { Note = restored, Pending = restored.Content, Failed = draft.Conflict, Conflict = draft.Conflict, Error = draft.Conflict ? "磁盘内容已变化，恢复的草稿未覆盖原文件" : null };
                 }
-                vaultLabel.Text = new DirectoryInfo(root).Name; vaultLabel.ToolTip = root; ShowJournals(); FlushAll();
+                vaultLabel.Text = new DirectoryInfo(root).Name; vaultLabel.ToolTip = root; UpdateVaultPath(); ShowJournals(); FlushAll();
             }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "无法打开笔记库"); if (store == null) ShowWelcome(); }
         }
@@ -240,6 +340,8 @@ namespace FlowLog.Native
             {
             editor = new OutlineEditor();
             editor.FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI"); editor.FontSize = 16; editor.Foreground = ink; editor.Background = paper;
+            editor.TextArea.SelectionBrush = new SolidColorBrush(dark ? Color.FromRgb(51, 143, 255) : Color.FromRgb(228, 242, 255));
+            editor.TextArea.SelectionForeground = new SolidColorBrush(dark ? Colors.White : Color.FromRgb(67, 63, 56));
             editor.Padding = new Thickness(0, 5, 0, 10); editor.BorderThickness = new Thickness(0); editor.WordWrap = true; editor.MinHeight = 100;
             editor.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled; editor.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
             editor.PageTitles = notes.Select(delegate(Note n) { return n.Title; }).ToList(); editor.SourceMode = sourceMode; editor.Text = String.IsNullOrEmpty(CurrentText(note)) ? "- " : CurrentText(note);
@@ -250,6 +352,15 @@ namespace FlowLog.Native
             editor.TextChanged += delegate { state.Pending = editor.Text; state.Note.Content = editor.Text; if (!state.Conflict) state.Failed = false; PersistDraft(state); saveTimer.Stop(); saveTimer.Start(); UpdateStatus(); };
             editor.GotKeyboardFocus += delegate { active = note; RefreshRelated(); };
             editor.LinkRequested += delegate(object sender, LinkEventArgs e) { FollowLink(e.Title, e.IsBlockRef); };
+            editor.PreviewMouseWheel += delegate(object sender, MouseWheelEventArgs e)
+            {
+                if (scroll == null) return;
+                double offset = scroll.VerticalOffset - e.Delta;
+                if (offset < 0) offset = 0;
+                if (offset > scroll.ScrollableHeight) offset = scroll.ScrollableHeight;
+                scroll.ScrollToVerticalOffset(offset);
+                e.Handled = true;
+            };
             }
             else
             {
@@ -405,9 +516,10 @@ namespace FlowLog.Native
         {
             Brush[] before = new Brush[] { ink, muted, paper, panel, edge, accent };
             dark = !dark; SetPalette();
+            UpdateThemeButton();
             Brush[] after = new Brush[] { ink, muted, paper, panel, edge, accent };
             ApplyPalette(this, before, after);
-            foreach (EditState s in states.Values) if (s.Editor != null) { s.Editor.Background = paper; s.Editor.Foreground = ink; s.Editor.TextArea.TextView.Redraw(); }
+            foreach (EditState s in states.Values) if (s.Editor != null) { s.Editor.Background = paper; s.Editor.Foreground = ink; s.Editor.TextArea.SelectionBrush = new SolidColorBrush(dark ? Color.FromRgb(51, 143, 255) : Color.FromRgb(228, 242, 255)); s.Editor.TextArea.SelectionForeground = new SolidColorBrush(dark ? Colors.White : Color.FromRgb(67, 63, 56)); s.Editor.TextArea.TextView.Redraw(); }
             RefreshRelated();
         }
         Brush PaletteBrush(Brush value, Brush[] before, Brush[] after)
@@ -423,15 +535,18 @@ namespace FlowLog.Native
             if (border != null) { border.Background = PaletteBrush(border.Background, before, after); border.BorderBrush = PaletteBrush(border.BorderBrush, before, after); }
             Panel container = element as Panel; if (container != null) container.Background = PaletteBrush(container.Background, before, after);
             TextBlock text = element as TextBlock; if (text != null) text.Foreground = PaletteBrush(text.Foreground, before, after);
+            WpfShape shape = element as WpfShape;
+            if (shape != null) { shape.Stroke = PaletteBrush(shape.Stroke, before, after); shape.Fill = PaletteBrush(shape.Fill, before, after); }
             for (int i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++) ApplyPalette(VisualTreeHelper.GetChild(element, i), before, after);
         }
         void ShowHelp()
         {
-            MessageBox.Show(this, "Ctrl+K  搜索全部笔记\nEnter  新增块   ·   Shift+Enter  块内换行\nTab / Shift+Tab  缩进 / 取消缩进\nAlt+↑ / ↓  移动块\nCtrl+Enter  切换任务状态\nCtrl+Z / Ctrl+Y  撤销 / 重做\n[[页面名]]  页面链接   ·   ((块 ID))  块引用\n/  打开块命令\n\n每日笔记从今天起连续呈现，向下滚动查看更早内容。\n自动保存到所选笔记库。冲突时保留草稿，避免覆盖磁盘改动。", "流记使用说明");
+            MessageBox.Show(this, "Ctrl+K  搜索全部笔记\nCtrl+B  收起 / 展开侧边栏\nEnter  新增块   ·   Shift+Enter  块内换行\nTab / Shift+Tab  缩进 / 取消缩进\nAlt+↑ / ↓  移动块\nCtrl+Enter  切换任务状态\nCtrl+Z / Ctrl+Y  撤销 / 重做\n[[页面名]]  页面链接   ·   ((块 ID))  块引用\n/  打开块命令\n\n行内渲染\n**ABC你好** 会被渲染为加粗文本\n*ABC你好* 会被渲染为斜体文本\n~~ABC你好~~ 会被渲染为删除线文本\n_ABC你好_ 会被渲染为下划线文本\n==ABC你好== 会被渲染为高亮文本\n`ABC` 会被渲染为灰底代码文本\n-> / <- 会被渲染为箭头符号\n@P / @D / @T / @L 会被渲染为符号，表示人物/日期/时间/位置\n\n每日笔记从今天起连续呈现，向下滚动查看更早内容。\n自动保存到所选笔记库。冲突时保留草稿，避免覆盖磁盘改动。", "流记使用说明");
         }
         void OnWindowKey(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control) { search.Focus(); search.SelectAll(); e.Handled = true; }
+            else if ((e.Key == Key.B && Keyboard.Modifiers == ModifierKeys.Control)) { ToggleSidebar(); e.Handled = true; }
             else if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control) { saveTimer.Stop(); foreach (EditState s in states.Values) if (!s.Conflict) s.Failed = false; FlushAll(); e.Handled = true; }
         }
         void OnClosing(object sender, CancelEventArgs e)

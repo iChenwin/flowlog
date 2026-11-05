@@ -34,7 +34,11 @@ namespace FlowLog.Native
         }
 
         public static string DefaultRoot() { return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "FlowLog"); }
-        private static string AppRoot() { return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlowLogNative"); }
+        private static string AppRoot() {
+            string overrideRoot = Environment.GetEnvironmentVariable("FLOWLOG_APP_DATA");
+            if (!String.IsNullOrWhiteSpace(overrideRoot)) return System.IO.Path.GetFullPath(overrideRoot);
+            return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlowLogNative");
+        }
         public static string LoadLastRoot()
         {
             string file = System.IO.Path.Combine(AppRoot(), "last-vault.txt");
@@ -226,13 +230,20 @@ namespace FlowLog.Native
         private static string Hash(byte[] bytes) { using (SHA256 sha = SHA256.Create()) { return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant(); } }
         private static void AtomicWrite(string path, byte[] bytes)
         {
+            AtomicWrite(path, bytes, delegate(string source, string destination) { File.Replace(source, destination, null); });
+        }
+        // The replacement operation is injectable so tests can exercise filesystem failures.
+        internal static void AtomicWrite(string path, byte[] bytes, Action<string, string> replace)
+        {
             CheckReparse(path);
             string temp = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(path), ".fl-" + Guid.NewGuid().ToString("N") + ".tmp");
             try
             {
                 using (FileStream stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { stream.Write(bytes, 0, bytes.Length); stream.Flush(true); }
                 CheckReparse(path);
-                if (File.Exists(path)) File.Replace(temp, path, null); else File.Move(temp, path);
+                // Never delete the destination to recover from a failed replacement.
+                // Propagate the error so callers retain the original file and recovery draft.
+                if (File.Exists(path)) replace(temp, path); else File.Move(temp, path);
             }
             finally { if (File.Exists(temp)) File.Delete(temp); }
         }

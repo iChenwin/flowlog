@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -36,6 +37,8 @@ namespace FlowLog.Native
         private HashSet<int> codeLineCache;
         private readonly OutlinePresentationGenerator presentation;
         private readonly BlockGripMargin gripMargin;
+        private readonly FoldMarkerMargin foldMargin;
+        private readonly GuideLineRenderer guides;
         private const string BlockDragFormat = "FlowLog.Native.OutlineBlock.v1";
         public IEnumerable<string> PageTitles { get; set; }
         public event EventHandler<LinkEventArgs> LinkRequested;
@@ -46,17 +49,39 @@ namespace FlowLog.Native
             set
             {
                 sourceMode = value;
-                ShowLineNumbers = value;
-                if (gripMargin != null) gripMargin.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
-                TextArea.TextView.Redraw();
+                try
+                {
+                    ShowLineNumbers = value;
+                    if (gripMargin != null) gripMargin.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
+                    if (foldMargin != null) foldMargin.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
+                    TextArea.TextView.Redraw();
+                }
+                catch
+                {
+                    // 首次切换到源码模式时，AvalonEdit 会惰性创建 LineNumberMargin，其内部资源
+                    // 解析可能抛出 TypeConverterMarkupExtension 相关异常（仅发生一次）。
+                    // 核心状态 sourceMode 已同步，后续切换不再抛出，故安全忽略。
+                }
             }
+        }
+
+        // Dotted outline guides are pure decoration and can be disabled for source mode
+        // or tests without touching the document.
+        internal bool ShowGuides
+        {
+            get { return guides != null && guides.Enabled; }
+            set { if (guides != null) { guides.Enabled = value; TextArea.TextView.Redraw(); } }
+        }
+
+        internal List<OutlineGuide> Guides
+        {
+            get { return guides == null ? new List<OutlineGuide>() : guides.Segments; }
         }
 
         public OutlineEditor()
         {
-            FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI");
-            FontSize = 16;
-            Foreground = new SolidColorBrush(Color.FromRgb(44, 54, 59));
+            FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI");            FontSize = 16;
+            Foreground = new SolidColorBrush(Color.FromRgb(67, 63, 56));
             Background = Brushes.Transparent;
             Padding = new Thickness(14, 10, 20, 30);
             WordWrap = true;
@@ -69,14 +94,24 @@ namespace FlowLog.Native
             Options.EnableRectangularSelection = false;
             Options.EnableVirtualSpace = false;
             Options.InheritWordWrapIndentation = true;
-            TextArea.SelectionBrush = new SolidColorBrush(Color.FromArgb(85, 121, 173, 216));
+            TextArea.SelectionBrush = new SolidColorBrush(Color.FromRgb(228, 242, 255));
+            TextArea.SelectionForeground = new SolidColorBrush(Color.FromRgb(67, 63, 56));
             TextArea.SelectionCornerRadius = 2;
             presentation = new OutlinePresentationGenerator(this);
             TextArea.TextView.ElementGenerators.Add(presentation);
             TextArea.TextView.LineTransformers.Add(new OutlineColorizer(this));
+            guides = new GuideLineRenderer(this);
+            TextArea.TextView.BackgroundRenderers.Add(guides);
             gripMargin = new BlockGripMargin(this);
             TextArea.LeftMargins.Insert(0, gripMargin);
             folding = FoldingManager.Install(TextArea);
+            // The default fold margin draws a +/- box plus a solid connector spanning
+            // the whole subtree. FlowLog renders a small marker per fold instead, so
+            // drop the stock margin and draw the marker in FoldMarkerMargin below.
+            foreach (FoldingMargin legacy in TextArea.LeftMargins.OfType<FoldingMargin>().ToList())
+                TextArea.LeftMargins.Remove(legacy);
+            foldMargin = new FoldMarkerMargin(this);
+            TextArea.LeftMargins.Insert(1, foldMargin);
             foldTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
             foldTimer.Tick += delegate { foldTimer.Stop(); RefreshFoldings(); };
             TextChanged += delegate { foldTimer.Stop(); foldTimer.Start(); };
@@ -542,15 +577,51 @@ namespace FlowLog.Native
             OutlineBlock block = Outline.At(Text, CaretOffset);
             if (block == null) return;
             DocumentLine line = Document.GetLineByNumber(block.Line);
+            FoldingSection section = FoldingAt(line);
+            if (section != null) section.IsFolded = !section.IsFolded;
+            if (foldMargin != null) foldMargin.InvalidateVisual();
+            TextArea.TextView.Redraw();
+        }
+
+        // A folding section starts at the parent line's end offset, so matching the
+        // start offset keeps the marker on the line that owns the children.
+        internal FoldingSection FoldingAt(DocumentLine line)
+        {
+            if (line == null) return null;
             FoldingSection section = folding.GetNextFolding(line.EndOffset);
-            if (section != null && section.StartOffset == line.EndOffset) section.IsFolded = !section.IsFolded;
+            return section != null && section.StartOffset == line.EndOffset ? section : null;
+        }
+
+        internal enum FoldMarker { None, Expanded, Collapsed }
+
+        // Exposed for tests: the marker this row would draw in the margin.
+        internal FoldMarker MarkerForLine(int lineNumber)
+        {
+            if (folding == null || lineNumber < 1 || lineNumber > Document.LineCount) return FoldMarker.None;
+            FoldingSection section = FoldingAt(Document.GetLineByNumber(lineNumber));
+            if (section == null) return FoldMarker.None;
+            return section.IsFolded ? FoldMarker.Collapsed : FoldMarker.Expanded;
+        }
+
+        // A sibling connector is drawn only while its source row is expanded; a folded
+        // row hides its children and drops the connector that would bridge to the sibling.
+        internal bool GuideIsDrawn(OutlineGuide guide)
+        {
+            return MarkerForLine(guide.FromLine) == FoldMarker.Expanded;
         }
 
         private void RefreshFoldings()
         {
             List<NewFolding> folds = new List<NewFolding>();
-            foreach (OutlineBlock block in Outline.Parse(Text))
+            var blocks = Outline.Parse(Text);
+            for (int i = 0; i < blocks.Count; i++)
             {
+                OutlineBlock block = blocks[i];
+                // 只有块有直接子块（下一块缩进更深）时才显示折叠方块。
+                // 非块行（如下一行不是 - 开头）不应导致折叠；Logseq 同样只对有子块的块显示折叠方块。
+                bool hasChildren = i + 1 < blocks.Count && blocks[i + 1].Indent > block.Indent;
+                if (!hasChildren) continue;
+
                 DocumentLine line = Document.GetLineByNumber(block.Line);
                 int end = block.EndOffset;
                 if (end > 0 && Document.GetCharAt(end - 1) == '\n') end--;
@@ -558,6 +629,9 @@ namespace FlowLog.Native
                 if (end > line.EndOffset) folds.Add(new NewFolding(line.EndOffset, end) { Name = " …" });
             }
             folding.UpdateFoldings(folds.OrderBy(delegate(NewFolding f) { return f.StartOffset; }), -1);
+            if (foldMargin != null) foldMargin.InvalidateVisual();
+            // Sibling connectors depend on the folded state, so redraw them with the folds.
+            TextArea.TextView.Redraw();
         }
 
         public void GoToLine(int line)
@@ -717,11 +791,36 @@ namespace FlowLog.Native
             {
                 if (owner.IsCodeLine(line.LineNumber)) { line = line.NextLine; continue; }
                 string text = CurrentContext.Document.GetText(line);
-                Match match = Outline.BlockPattern.Match(text);
-                int interested = match.Success ? line.Offset + match.Groups[1].Length : -1;
+                int best = -1;
                 // Keep metadata editable when the caret is on that line.
-                if (Outline.MetadataPattern.IsMatch(text) && owner.TextArea.Caret.Line != line.LineNumber) interested = line.Offset;
-                if (interested >= startOffset) return interested;
+                if (Outline.MetadataPattern.IsMatch(text) && owner.TextArea.Caret.Line != line.LineNumber)
+                {
+                    int metaOffset = line.Offset;
+                    if (metaOffset >= startOffset && (best == -1 || metaOffset < best)) best = metaOffset;
+                }
+                Match block = Outline.BlockPattern.Match(text);
+                if (block.Success)
+                {
+                    // Widen the leading indentation for display only: the two Markdown
+                    // spaces stay in the document, but each level occupies Logseq's
+                    // ~29px rhythm. This keeps file compatibility and native offsets.
+                    string whitespace = block.Groups[1].Value;
+                    if (whitespace.Length > 0 && line.Offset >= startOffset && (best == -1 || line.Offset < best)) best = line.Offset;
+                    int bulletOffset = line.Offset + whitespace.Length;
+                    if (bulletOffset >= startOffset && (best == -1 || bulletOffset < best)) best = bulletOffset;
+                }
+                string inlineText = Outline.WithoutInlineCode(text);
+                foreach (Match arrow in Outline.ArrowPattern.Matches(inlineText))
+                {
+                    int arrowOffset = line.Offset + arrow.Index;
+                    if (arrowOffset >= startOffset && (best == -1 || arrowOffset < best)) best = arrowOffset;
+                }
+                foreach (Match mention in Outline.MentionPattern.Matches(inlineText))
+                {
+                    int mentionOffset = line.Offset + mention.Index;
+                    if (mentionOffset >= startOffset && (best == -1 || mentionOffset < best)) best = mentionOffset;
+                }
+                if (best >= startOffset) return best;
                 line = line.NextLine;
             }
             return -1;
@@ -734,8 +833,35 @@ namespace FlowLog.Native
             if (offset == line.Offset && Outline.MetadataPattern.IsMatch(text) && owner.TextArea.Caret.Line != line.LineNumber)
                 return new FormattedTextElement("\u200B", line.Length);
             Match match = Outline.BlockPattern.Match(text);
-            if (match.Success && offset == line.Offset + match.Groups[1].Length)
-                return new FormattedTextElement("•  ", 2);
+            if (match.Success)
+            {
+                string whitespace = match.Groups[1].Value;
+                if (whitespace.Length > 0 && offset == line.Offset)
+                {
+                    // Display-only indentation: replace the Markdown whitespace with a
+                    // wider run of spaces so adjacent levels match Logseq's visible step.
+                    return new FormattedTextElement(new string(' ', Outline.DisplayIndent(whitespace)), whitespace.Length);
+                }
+                if (offset == line.Offset + whitespace.Length)
+                    return new FormattedTextElement("•  ", 2);
+            }
+            int relative = offset - line.Offset;
+            if (relative >= 0 && relative + 2 <= text.Length)
+            {
+                string pair = text.Substring(relative, 2);
+                if (pair == "->")
+                    return new FormattedTextElement("\U0001F852", 2);
+                if (pair == "<-")
+                    return new FormattedTextElement("\U0001F850", 2);
+                if (pair == "@P")
+                    return new FormattedTextElement("\U0001F464", 2);
+                if (pair == "@D")
+                    return new FormattedTextElement("\U0001F4C5", 2);
+                if (pair == "@T")
+                    return new FormattedTextElement("\U0001F552", 2);
+                if (pair == "@L")
+                    return new FormattedTextElement("\U0001F4CD", 2);
+            }
             return null;
         }
     }
@@ -744,10 +870,13 @@ namespace FlowLog.Native
     {
         private readonly OutlineEditor owner;
         public OutlineColorizer(OutlineEditor owner) { this.owner = owner; }
-        private static readonly Brush link = new SolidColorBrush(Color.FromRgb(38, 116, 139));
-        private static readonly Brush muted = new SolidColorBrush(Color.FromRgb(130, 143, 151));
-        private static readonly Brush darkLink = new SolidColorBrush(Color.FromRgb(118, 205, 211));
-        private static readonly Brush darkMuted = new SolidColorBrush(Color.FromRgb(161, 174, 183));
+        private static readonly Brush link = new SolidColorBrush(Color.FromRgb(16, 107, 163));
+        private static readonly Brush muted = new SolidColorBrush(Color.FromRgb(100, 100, 100));
+        private static readonly Brush darkLink = new SolidColorBrush(Color.FromRgb(138, 187, 187));
+        private static readonly Brush darkMuted = new SolidColorBrush(Color.FromRgb(147, 161, 161));
+        private static readonly Brush highlight = new SolidColorBrush(Color.FromRgb(255, 255, 0));
+        private static readonly Brush codeBackground = new SolidColorBrush(Color.FromRgb(242, 242, 242));
+        private static readonly Brush inlineForeground = new SolidColorBrush(Color.FromRgb(67, 63, 56));
         protected override void ColorizeLine(DocumentLine line)
         {
             string text = CurrentContext.Document.GetText(line);
@@ -764,9 +893,51 @@ namespace FlowLog.Native
                 });
                 return;
             }
-            foreach (Match match in Outline.LinkPattern.Matches(text))
+            string inlineText = Outline.WithoutInlineCode(text);
+            foreach (Match match in Outline.LinkPattern.Matches(inlineText))
                 ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
                     delegate(VisualLineElement element) { element.TextRunProperties.SetForegroundBrush(linkBrush); });
+            foreach (Match match in Outline.BoldPattern.Matches(inlineText))
+                ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
+                    delegate(VisualLineElement element) { element.TextRunProperties.SetTypeface(new Typeface(element.TextRunProperties.Typeface.FontFamily, FontStyles.Normal, FontWeights.Bold, FontStretches.Normal)); });
+            foreach (Match match in Outline.ItalicPattern.Matches(inlineText))
+                ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
+                    delegate(VisualLineElement element) { element.TextRunProperties.SetTypeface(new Typeface(element.TextRunProperties.Typeface.FontFamily, FontStyles.Italic, element.TextRunProperties.Typeface.Weight, FontStretches.Normal)); });
+            foreach (Match match in Outline.StrikethroughPattern.Matches(inlineText))
+                ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
+                    delegate(VisualLineElement element) {
+                        var props = element.TextRunProperties;
+                        var tdField = props.GetType().GetField("textDecorations", BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (tdField != null)
+                            tdField.SetValue(props, TextDecorations.Strikethrough);
+                    });
+            foreach (Match match in Outline.UnderlinePattern.Matches(inlineText))
+                ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
+                    delegate(VisualLineElement element) {
+                        var props = element.TextRunProperties;
+                        var tdField = props.GetType().GetField("textDecorations", BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (tdField != null)
+                            tdField.SetValue(props, TextDecorations.Underline);
+                    });
+            foreach (Match match in Outline.HighlightPattern.Matches(inlineText))
+                ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
+                    delegate(VisualLineElement element) {
+                        var props = element.TextRunProperties;
+                        var bgField = props.GetType().GetField("backgroundBrush", BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (bgField != null)
+                            bgField.SetValue(props, highlight);
+                        props.SetForegroundBrush(inlineForeground);
+                    });
+            foreach (Match match in Outline.CodePattern.Matches(text))
+                ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
+                    delegate(VisualLineElement element) {
+                        var props = element.TextRunProperties;
+                        var bgField = props.GetType().GetField("backgroundBrush", BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (bgField != null)
+                            bgField.SetValue(props, codeBackground);
+                        props.SetForegroundBrush(inlineForeground);
+                    });
+
             Match task = Regex.Match(text, @"^[ \t]*- (TODO|DOING|DONE)\b");
             if (task.Success)
             {
@@ -783,4 +954,237 @@ namespace FlowLog.Native
                 ChangeLinePart(line.Offset, line.EndOffset, delegate(VisualLineElement element) { element.TextRunProperties.SetForegroundBrush(mutedBrush); });
         }
     }
+
+    // Custom left margin drawing the fold marker for each block that owns children.
+    // Expanded rows point down; the stock AvalonEdit +/- box and the solid connector
+    // that used to span the whole subtree are replaced by this margin.
+    internal sealed class FoldMarkerMargin : AbstractMargin
+    {
+        private readonly OutlineEditor owner;
+        private static readonly Brush lightMarker = Frozen(Color.FromRgb(150, 162, 168));
+        private static readonly Brush darkMarker = Frozen(Color.FromRgb(176, 188, 194));
+
+        public FoldMarkerMargin(OutlineEditor owner)
+        {
+            this.owner = owner;
+            Width = 20;
+            Cursor = Cursors.Hand;
+            ToolTip = "折叠 / 展开子块 · Ctrl+.";
+            owner.TextArea.TextView.VisualLinesChanged += delegate { InvalidateVisual(); };
+            owner.TextArea.TextView.ScrollOffsetChanged += delegate { InvalidateVisual(); };
+            owner.TextChanged += delegate { InvalidateVisual(); };
+        }
+
+        protected override Size MeasureOverride(Size availableSize) { return new Size(Width, 0); }
+
+        protected override void OnRender(DrawingContext context)
+        {
+            context.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, ActualWidth, ActualHeight));
+            if (TextView == null || !TextView.VisualLinesValid || owner.SourceMode) return;
+            Brush brush = MarkerBrush();
+            double x = ActualWidth / 2;
+            foreach (VisualLine visual in TextView.VisualLines)
+            {
+                double y = visual.VisualTop - TextView.VerticalOffset + visual.TextLines[0].Height / 2;
+                OutlineEditor.FoldMarker marker = owner.MarkerForLine(visual.FirstDocumentLine.LineNumber);
+                if (marker == OutlineEditor.FoldMarker.Expanded) DrawDownTriangle(context, brush, x, y);
+                else if (marker == OutlineEditor.FoldMarker.Collapsed) DrawRightTriangle(context, brush, x - 1, y);
+            }
+        }
+
+        protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
+        {
+            base.OnMouseLeftButtonDown(e);
+            if (TextView == null || !TextView.VisualLinesValid) return;
+            double pointer = e.GetPosition(this).Y;
+            foreach (VisualLine visual in TextView.VisualLines)
+            {
+                double top = visual.VisualTop - TextView.VerticalOffset;
+                if (pointer < top || pointer > top + visual.TextLines[0].Height) continue;
+                FoldingSection section = owner.FoldingAt(visual.FirstDocumentLine);
+                if (section == null) return;
+                section.IsFolded = !section.IsFolded;
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+        }
+
+        private Brush MarkerBrush()
+        {
+            SolidColorBrush background = owner.Background as SolidColorBrush;
+            bool dark = background != null && background.Color.A > 0
+                && (background.Color.R * 299 + background.Color.G * 587 + background.Color.B * 114) < 128000;
+            return dark ? darkMarker : lightMarker;
+        }
+
+        private static void DrawDownTriangle(DrawingContext context, Brush brush, double x, double y)
+        {
+            StreamGeometry geometry = new StreamGeometry();
+            using (StreamGeometryContext path = geometry.Open())
+            {
+                path.BeginFigure(new Point(x - 3.6, y - 2.4), true, true);
+                path.LineTo(new Point(x + 3.6, y - 2.4), true, false);
+                path.LineTo(new Point(x, y + 2.8), true, false);
+            }
+            geometry.Freeze();
+            context.DrawGeometry(brush, null, geometry);
+        }
+
+        // Collapsed rows point right, like Logseq's closed outline chevron.
+        private static void DrawRightTriangle(DrawingContext context, Brush brush, double x, double y)
+        {
+            StreamGeometry geometry = new StreamGeometry();
+            using (StreamGeometryContext path = geometry.Open())
+            {
+                path.BeginFigure(new Point(x - 2.0, y - 3.8), true, true);
+                path.LineTo(new Point(x + 2.8, y), true, false);
+                path.LineTo(new Point(x - 2.0, y + 3.8), true, false);
+            }
+            geometry.Freeze();
+            context.DrawGeometry(brush, null, geometry);
+        }
+
+        private static Brush Frozen(Color color)
+        {
+            SolidColorBrush brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
+        }
+    }
+
+    // Dotted vertical connectors between an outline block and its child rows. They are
+    // drawn behind the text, so selection, clipboard and undo keep seeing the original
+    // Markdown. This replaces the solid whole-subtree line of the stock fold margin.
+    internal sealed class GuideLineRenderer : IBackgroundRenderer
+    {
+        private readonly OutlineEditor owner;
+        private static readonly Brush lightLine = Frozen(Color.FromArgb(110, 150, 162, 168));
+        private static readonly Brush darkLine = Frozen(Color.FromArgb(105, 176, 188, 194));
+        private static readonly DashStyle dots = Dots();
+        private List<OutlineGuide> segments = new List<OutlineGuide>();
+        private ITextSourceVersion version;
+        private double space = -1;
+        private string spaceKey;
+
+        public GuideLineRenderer(OutlineEditor owner)
+        {
+            this.owner = owner;
+            Enabled = true;
+        }
+
+        public KnownLayer Layer { get { return KnownLayer.Selection; } }
+        public bool Enabled { get; set; }
+        public List<OutlineGuide> Segments { get { Sync(); return segments; } }
+
+        public void Sync()
+        {
+            if (Object.ReferenceEquals(version, owner.Document.Version)) return;
+            version = owner.Document.Version;
+            segments = Outline.Guides(owner.Text);
+        }
+
+        public void Draw(TextView textView, DrawingContext context)
+        {
+            if (!Enabled || owner.SourceMode) return;
+            Sync();
+            if (segments.Count == 0 || !textView.VisualLinesValid || textView.VisualLines.Count == 0) return;
+            Pen pen = new Pen(IsDark() ? darkLine : lightLine, 1.4) {
+                DashStyle = dots, DashCap = PenLineCap.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round
+            };
+            pen.Freeze();
+            int first = textView.VisualLines[0].FirstDocumentLine.LineNumber;
+            int last = textView.VisualLines[textView.VisualLines.Count - 1].LastDocumentLine.LineNumber;
+            double advance = Space(textView);
+            foreach (OutlineGuide guide in segments)
+            {
+                if (guide.ToLine < first || guide.FromLine > last) continue;
+                Point top, bottom;
+                if (!Geometry(textView, guide, first, last, advance, out top, out bottom)) continue;
+                context.DrawLine(pen, top, bottom);
+            }
+        }
+
+        // The connector joins the two rows' bullet columns, running from the source
+        // row's bullet to the target row's bullet. A folded source row hides its
+        // children and must not draw, so the folding state is consulted here.
+        private bool Geometry(TextView textView, OutlineGuide guide, int first, int last, double advance, out Point top, out Point bottom)
+        {
+            top = new Point(0, 0); bottom = new Point(0, 0);
+            if (!owner.GuideIsDrawn(guide)) return false;
+            double viewTop = textView.VerticalOffset, viewBottom = viewTop + textView.ActualHeight;
+            VisualLine from = Visual(textView, guide.FromLine), to = Visual(textView, guide.ToLine);
+            if (from == null && guide.FromLine >= first) return false;
+            if (to == null && guide.ToLine <= last) return false;
+            // The bullet sits at the start of the row's own content, so the connector's
+            // column follows the source row's indent rather than its children's.
+            int level = guide.Indent / 2;
+            double x = level * Outline.VisualIndentSpaces * advance - advance / 2;
+            if (x < 1) return false;
+            double y1 = from == null ? viewTop : from.VisualTop + Row(from);
+            double y2 = to == null ? viewBottom : to.VisualTop + Row(to);
+            if (y1 < viewTop) y1 = viewTop;
+            if (y2 > viewBottom) y2 = viewBottom;
+            if (y2 - y1 < 1) return false;
+            top = new Point(x, y1 - viewTop);
+            bottom = new Point(x, y2 - viewTop);
+            return true;
+        }
+
+        private static double Row(VisualLine visual)
+        {
+            // Wrapped rows put the bullet on the first text line, not at the visual middle.
+            return visual.TextLines.Count > 0 ? visual.TextLines[0].Height / 2 : visual.Height / 2;
+        }
+
+        private static VisualLine Visual(TextView textView, int lineNumber)
+        {
+            foreach (VisualLine visual in textView.VisualLines)
+                if (visual.FirstDocumentLine.LineNumber == lineNumber) return visual;
+            return null;
+        }
+
+        // AvalonEdit exposes the CJK space advance only, so measure the ASCII space the
+        // indentation actually renders with; the guide must land on the child bullet.
+        private double Space(TextView textView)
+        {
+            TextFormattingMode mode = TextOptions.GetTextFormattingMode(textView);
+            string key = owner.FontFamily.Source + "|" + owner.FontSize.ToString(CultureInfo.InvariantCulture) + "|" + mode;
+            if (space > 0 && key == spaceKey) return space;
+            spaceKey = key;
+            space = -1;
+            try
+            {
+                Typeface typeface = new Typeface(owner.FontFamily, owner.FontStyle, owner.FontWeight, owner.FontStretch);
+                FormattedText text = new FormattedText("    ", CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+                    typeface, owner.FontSize, Brushes.Black, null, mode, VisualTreeHelper.GetDpi(textView).PixelsPerDip);
+                if (text.WidthIncludingTrailingWhitespace > 0) space = text.WidthIncludingTrailingWhitespace / 4;
+            }
+            catch (ArgumentException) { }
+            if (space <= 0) space = textView.WideSpaceWidth / 2;
+            return space;
+        }
+
+        private bool IsDark()
+        {
+            SolidColorBrush background = owner.Background as SolidColorBrush;
+            return background != null && background.Color.A > 0
+                && (background.Color.R * 299 + background.Color.G * 587 + background.Color.B * 114) < 128000;
+        }
+
+        private static DashStyle Dots()
+        {
+            DashStyle style = new DashStyle(new double[] { 0.6, 2.2 }, 0);
+            style.Freeze();
+            return style;
+        }
+
+        private static Brush Frozen(Color color)
+        {
+            SolidColorBrush brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
+        }
+    }
+
 }
