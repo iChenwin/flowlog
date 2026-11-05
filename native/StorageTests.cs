@@ -74,6 +74,37 @@ namespace FlowLog.Native
                 rejected = false;
                 try { store.ListNotes(); } catch (DecoderFallbackException) { rejected = true; }
                 Require(rejected && File.ReadAllBytes(invalidFile)[0] == 255, "Reject invalid UTF-8 without data loss"); count++;
+
+                string failurePath = System.IO.Path.Combine(root, "pages", "replace-failure.md");
+                File.WriteAllText(failurePath, "original");
+                bool replacementFailed = false;
+                try
+                {
+                    VaultStore.AtomicWrite(failurePath, Encoding.UTF8.GetBytes("replacement"), delegate(string source, string destination)
+                    {
+                        Require(File.ReadAllText(source) == "replacement", "Replacement receives complete temporary content");
+                        throw new IOException("Simulated filesystem replacement failure");
+                    });
+                }
+                catch (IOException) { replacementFailed = true; }
+                Require(replacementFailed && File.ReadAllText(failurePath) == "original", "Failed replacement propagates without deleting the original"); count++;
+                Require(Directory.GetFiles(System.IO.Path.GetDirectoryName(failurePath), ".fl-*.tmp").Length == 0, "Failed replacement cleans up temporary files"); count++;
+
+                Note lockedNote = VaultStore.CreatePage("locked-save");
+                string lockedRevision = store.Save(lockedNote, "original", "");
+                lockedNote.Content = "pending edit";
+                store.SaveDraft(lockedNote, lockedRevision);
+                replacementFailed = false;
+                using (FileStream locked = new FileStream(System.IO.Path.Combine(root, lockedNote.Path), FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    try { store.Save(lockedNote, lockedNote.Content, lockedRevision); }
+                    catch (IOException) { replacementFailed = true; }
+                    Require(replacementFailed && lockedNote.Revision == lockedRevision && File.ReadAllText(System.IO.Path.Combine(root, lockedNote.Path)) == "original", "Locked save preserves the original bytes and revision"); count++;
+                    Require(store.ListDrafts().Any(x => x.Note.Path == lockedNote.Path && x.Note.Content == "pending edit" && !x.Conflict), "Failed save retains a recoverable draft"); count++;
+                }
+                store.Save(lockedNote, lockedNote.Content, lockedRevision);
+                Require(File.ReadAllText(System.IO.Path.Combine(root, lockedNote.Path)) == "pending edit", "Save can be retried after the lock is released"); count++;
+                store.ClearDraft(lockedNote.Path);
                 return count;
             }
             finally

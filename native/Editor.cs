@@ -809,12 +809,13 @@ namespace FlowLog.Native
                     int bulletOffset = line.Offset + whitespace.Length;
                     if (bulletOffset >= startOffset && (best == -1 || bulletOffset < best)) best = bulletOffset;
                 }
-                foreach (Match arrow in Outline.ArrowPattern.Matches(text))
+                string inlineText = Outline.WithoutInlineCode(text);
+                foreach (Match arrow in Outline.ArrowPattern.Matches(inlineText))
                 {
                     int arrowOffset = line.Offset + arrow.Index;
                     if (arrowOffset >= startOffset && (best == -1 || arrowOffset < best)) best = arrowOffset;
                 }
-                foreach (Match mention in Outline.MentionPattern.Matches(text))
+                foreach (Match mention in Outline.MentionPattern.Matches(inlineText))
                 {
                     int mentionOffset = line.Offset + mention.Index;
                     if (mentionOffset >= startOffset && (best == -1 || mentionOffset < best)) best = mentionOffset;
@@ -875,6 +876,7 @@ namespace FlowLog.Native
         private static readonly Brush darkMuted = new SolidColorBrush(Color.FromRgb(147, 161, 161));
         private static readonly Brush highlight = new SolidColorBrush(Color.FromRgb(255, 255, 0));
         private static readonly Brush codeBackground = new SolidColorBrush(Color.FromRgb(242, 242, 242));
+        private static readonly Brush inlineForeground = new SolidColorBrush(Color.FromRgb(67, 63, 56));
         protected override void ColorizeLine(DocumentLine line)
         {
             string text = CurrentContext.Document.GetText(line);
@@ -891,16 +893,17 @@ namespace FlowLog.Native
                 });
                 return;
             }
-            foreach (Match match in Outline.LinkPattern.Matches(text))
+            string inlineText = Outline.WithoutInlineCode(text);
+            foreach (Match match in Outline.LinkPattern.Matches(inlineText))
                 ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
                     delegate(VisualLineElement element) { element.TextRunProperties.SetForegroundBrush(linkBrush); });
-            foreach (Match match in Outline.BoldPattern.Matches(text))
+            foreach (Match match in Outline.BoldPattern.Matches(inlineText))
                 ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
                     delegate(VisualLineElement element) { element.TextRunProperties.SetTypeface(new Typeface(element.TextRunProperties.Typeface.FontFamily, FontStyles.Normal, FontWeights.Bold, FontStretches.Normal)); });
-            foreach (Match match in Outline.ItalicPattern.Matches(text))
+            foreach (Match match in Outline.ItalicPattern.Matches(inlineText))
                 ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
                     delegate(VisualLineElement element) { element.TextRunProperties.SetTypeface(new Typeface(element.TextRunProperties.Typeface.FontFamily, FontStyles.Italic, element.TextRunProperties.Typeface.Weight, FontStretches.Normal)); });
-            foreach (Match match in Outline.StrikethroughPattern.Matches(text))
+            foreach (Match match in Outline.StrikethroughPattern.Matches(inlineText))
                 ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
                     delegate(VisualLineElement element) {
                         var props = element.TextRunProperties;
@@ -908,7 +911,7 @@ namespace FlowLog.Native
                         if (tdField != null)
                             tdField.SetValue(props, TextDecorations.Strikethrough);
                     });
-            foreach (Match match in Outline.UnderlinePattern.Matches(text))
+            foreach (Match match in Outline.UnderlinePattern.Matches(inlineText))
                 ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
                     delegate(VisualLineElement element) {
                         var props = element.TextRunProperties;
@@ -916,13 +919,14 @@ namespace FlowLog.Native
                         if (tdField != null)
                             tdField.SetValue(props, TextDecorations.Underline);
                     });
-            foreach (Match match in Outline.HighlightPattern.Matches(text))
+            foreach (Match match in Outline.HighlightPattern.Matches(inlineText))
                 ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
                     delegate(VisualLineElement element) {
                         var props = element.TextRunProperties;
                         var bgField = props.GetType().GetField("backgroundBrush", BindingFlags.Instance | BindingFlags.NonPublic);
                         if (bgField != null)
                             bgField.SetValue(props, highlight);
+                        props.SetForegroundBrush(inlineForeground);
                     });
             foreach (Match match in Outline.CodePattern.Matches(text))
                 ChangeLinePart(line.Offset + match.Index, line.Offset + match.Index + match.Length,
@@ -931,6 +935,7 @@ namespace FlowLog.Native
                         var bgField = props.GetType().GetField("backgroundBrush", BindingFlags.Instance | BindingFlags.NonPublic);
                         if (bgField != null)
                             bgField.SetValue(props, codeBackground);
+                        props.SetForegroundBrush(inlineForeground);
                     });
 
             Match task = Regex.Match(text, @"^[ \t]*- (TODO|DOING|DONE)\b");

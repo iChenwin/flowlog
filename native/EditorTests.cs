@@ -29,6 +29,31 @@ namespace FlowLog.Native
             window.UpdateLayout();
             window.Dispatcher.Invoke(DispatcherPriority.Render, new Action(delegate { }));
         }
+        private static VisualLineElement ElementAt(OutlineEditor editor, int offset)
+        {
+            VisualLine line = editor.TextArea.TextView.GetVisualLine(editor.Document.GetLineByOffset(offset).LineNumber);
+            int current = line.FirstDocumentLine.Offset;
+            foreach (VisualLineElement element in line.Elements)
+            {
+                if (offset < current + element.DocumentLength) return element;
+                current += element.DocumentLength;
+            }
+            throw new Exception("No visual element at document offset " + offset);
+        }
+        private static double Luminance(Color color)
+        {
+            return 0.2126 * Linear(color.R) + 0.7152 * Linear(color.G) + 0.0722 * Linear(color.B);
+        }
+        private static double Linear(byte channel)
+        {
+            double value = channel / 255.0;
+            return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
+        }
+        private static double Contrast(Brush foreground, Brush background)
+        {
+            double a = Luminance(((SolidColorBrush)foreground).Color), b = Luminance(((SolidColorBrush)background).Color);
+            return (Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05);
+        }
         private static KeyEventArgs KeyEvent(OutlineEditor editor, Window window, Key key)
         {
             KeyEventArgs result = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), Environment.TickCount, key);
@@ -333,6 +358,35 @@ namespace FlowLog.Native
                     var brush = bgField.GetValue(props) as SolidColorBrush;
                     return brush != null && brush.Color == Color.FromRgb(242, 242, 242);
                 }), "Inline code `ABC` renders with gray background");
+
+                const string literal = "- `x -> <- @P @D @T @L **bold** *italic* ~~strike~~ _under_ ==mark== [[page]]` -> @P **outside**";
+                editor.Text = literal; Pump(window);
+                Require(editor.TextArea.TextView.VisualLines.First().Elements.Count(x => x is FormattedTextElement) == 3, "Only the bullet and symbols outside inline code are replaced");
+                foreach (string token in new [] { "->", "<-", "@P", "@D", "@T", "@L", "bold", "italic", "strike", "under", "mark", "page" })
+                {
+                    VisualLineElement element = ElementAt(editor, literal.IndexOf(token, StringComparison.Ordinal));
+                    Require(element is VisualLineText && element.TextRunProperties.Typeface.Weight == FontWeights.Normal
+                        && element.TextRunProperties.Typeface.Style == FontStyles.Normal
+                        && (element.TextRunProperties.TextDecorations == null || element.TextRunProperties.TextDecorations.Count == 0)
+                        && ((SolidColorBrush)element.TextRunProperties.BackgroundBrush).Color == Color.FromRgb(242, 242, 242), "Inline code keeps literal text and excludes markup: " + token);
+                }
+                Require(ElementAt(editor, literal.IndexOf("outside", StringComparison.Ordinal)).TextRunProperties.Typeface.Weight == FontWeights.Bold, "Emphasis outside inline code still renders");
+                Require(editor.Text == literal, "Inline code rendering preserves the source");
+                editor.Text = "- `->` @D `@L **literal**` <-"; Pump(window);
+                Require(editor.TextArea.TextView.VisualLines.First().Elements.Count(x => x is FormattedTextElement) == 3, "Multiple code spans exclude symbols while surrounding mentions and arrows render");
+
+                foreach (bool dark in new [] { false, true })
+                {
+                    editor.Background = new SolidColorBrush(dark ? Color.FromRgb(0, 43, 54) : Colors.White);
+                    editor.Foreground = new SolidColorBrush(dark ? Color.FromRgb(164, 181, 182) : Color.FromRgb(67, 63, 56));
+                    editor.Text = "- `code` ==highlight== plain"; Pump(window);
+                    foreach (string token in new [] { "code", "highlight" })
+                    {
+                        var props = ElementAt(editor, editor.Text.IndexOf(token, StringComparison.Ordinal)).TextRunProperties;
+                        Require(Contrast(props.ForegroundBrush, props.BackgroundBrush) >= 4.5, "Inline " + token + " has readable contrast in " + (dark ? "dark" : "light") + " theme");
+                    }
+                    Require(ElementAt(editor, editor.Text.IndexOf("plain", StringComparison.Ordinal)).TextRunProperties.ForegroundBrush == editor.Foreground, "Inline colors do not leak into surrounding text");
+                }
                 return count;
             }
             finally { window.Close(); }

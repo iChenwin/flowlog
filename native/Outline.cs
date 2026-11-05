@@ -66,6 +66,12 @@ namespace FlowLog.Native
         public static readonly Regex LocationPattern = new Regex(@"(?<!\w)@L(?!\w)", RegexOptions.Compiled);
         public static readonly Regex MentionPattern = new Regex(@"(?<!\w)@(?:P|D|T|L)(?!\w)", RegexOptions.Compiled);
 
+        // Preserve offsets while preventing other inline patterns from crossing code spans.
+        public static string WithoutInlineCode(string text)
+        {
+            return CodePattern.Replace(text, delegate(Match match) { return new string('\n', match.Length); });
+        }
+
         public static List<OutlineLine> Lines(string text)
         {
             text = text ?? "";
