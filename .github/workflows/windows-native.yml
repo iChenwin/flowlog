@@ -47,6 +47,7 @@ jobs:
           files: |
             release-assets/packages/*
             release-assets/TestResults/native-smoke.json
+            release-assets/TestResults/native-tests.json
           fail_on_unmatched_files: true
           body: |
             Windows native WPF + AvalonEdit preview. No Electron or WebView.

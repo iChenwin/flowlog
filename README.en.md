@@ -2,7 +2,7 @@
 
 A lightweight Windows native daily outliner inspired by Logseq's journal stream.
 
-[Download 0.2.0 native preview](https://github.com/iChenwin/flowlog/releases/tag/v0.2.0) · [中文](README.md) · [Validation](docs/NATIVE-VALIDATION.md)
+[Download 0.2.1 native preview](https://github.com/iChenwin/flowlog/releases/tag/v0.2.1) · [中文](README.md) · [Validation](docs/NATIVE-VALIDATION.md)
 
 **C# / WPF / AvalonEdit**, without Electron, WebView, Chromium or a local web server. Requires system **.NET Framework 4.8**, excluded from package size. Installer under 1 MB; exact bytes and SHA-256 are release attachments.
 

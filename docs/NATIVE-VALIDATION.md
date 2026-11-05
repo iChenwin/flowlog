@@ -1,4 +1,12 @@
-# 0.2.0 Windows 原生版验证
+# Windows 原生版验证
+
+## 0.2.1 更新（2026-11-05）
+
+本机原生测试通过 224 项：存储 28 项、编辑器 137 项、窗口 59 项。新增保存替换失败、锁定文件下原文件与草稿保留、解除锁定后重试、行内代码字面量与明暗主题文字对比度检查。发布构建、安装包与跨进程验证结果，以 v0.2.1 对应的 CI 和发布附件 `native-tests.json`、`native-smoke.json`、`native-package-report.json` 为准。
+
+以下保留 0.2.0 的基线验证记录；包体积与检查数不代表 0.2.1。
+
+## 0.2.0 基线
 
 日期：2026-10-21。本页与 0.1 WebView 原型的验证记录分开。原生版为 C#5 / WPF / AvalonEdit 6.3.1.120，目标系统 .NET Framework 4.8。公开构建见 [Windows native 工作流](https://github.com/iChenwin/flowlog/actions/workflows/windows-native.yml)，发布附件提供包体积、校验值和跨进程验证报告。
 

@@ -1,8 +1,8 @@
 # FlowLog 流记
 
-以连续日记流为中心的轻量 Windows 大纲笔记。**0.2.0 使用 C# / WPF / AvalonEdit 原生实现**，直接编辑本地 Markdown。
+以连续日记流为中心的轻量 Windows 大纲笔记。**0.2.1 使用 C# / WPF / AvalonEdit 原生实现**，直接编辑本地 Markdown。
 
-[下载 Windows 原生版](https://github.com/iChenwin/flowlog/releases/tag/v0.2.0) · [验证记录](docs/NATIVE-VALIDATION.md) · [架构和兼容边界](docs/NATIVE-ARCHITECTURE.md) · [English](README.en.md)
+[下载 Windows 原生版](https://github.com/iChenwin/flowlog/releases/tag/v0.2.1) · [验证记录](docs/NATIVE-VALIDATION.md) · [架构和兼容边界](docs/NATIVE-ARCHITECTURE.md) · [English](README.en.md)
 
 安装包小于 1 MB，精确字节和 SHA-256 见发布附件 `native-package-report.json`。运行需要系统 **.NET Framework 4.8**，该系统组件不包含在安装包体积内。应用不使用 Electron、WebView、Chromium 或本地网页服务。
 
@@ -22,7 +22,7 @@
 
 ## 安装与开始
 
-1. 下载 `FlowLog-Native-0.2.0-Setup.exe`，或解压便携 ZIP。无需管理员权限。
+1. 下载 `FlowLog-Native-0.2.1-Setup.exe`，或解压便携 ZIP。无需管理员权限。
 2. 系统需有 .NET Framework 4.8；安装程序会检查并提示缺失，不会隐藏下载运行时。
 3. 选择本地笔记库，或使用“文档”目录中的 `FlowLog`。输入第一条事项，Enter 继续，Tab 缩进。
 4. 输入 `[[项目计划]]`，Ctrl+单击链接打开页面；Ctrl+K 搜索，Ctrl+Enter 切换任务。

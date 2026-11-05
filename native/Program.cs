@@ -10,8 +10,8 @@ using System.Security.Principal;
 [assembly: AssemblyDescription("Windows native daily outliner")]
 [assembly: AssemblyCompany("iChenwin")]
 [assembly: AssemblyProduct("FlowLog Native")]
-[assembly: AssemblyVersion("0.2.0.0")]
-[assembly: AssemblyFileVersion("0.2.0.0")]
+[assembly: AssemblyVersion("0.2.1.0")]
+[assembly: AssemblyFileVersion("0.2.1.0")]
 
 namespace FlowLog.Native
 {

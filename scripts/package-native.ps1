@@ -20,12 +20,12 @@ if (-not (Test-Path -LiteralPath $nsis)) {
 if ($LASTEXITCODE -ne 0) { throw 'Native installer packaging failed' }
 $names = @('FlowLog.Native.exe','FlowLog.Native.exe.config','ICSharpCode.AvalonEdit.dll','LICENSE.txt','THIRD-PARTY-NOTICES.txt')
 $files = @($names | ForEach-Object { Join-Path $native ('out/' + $_) })
-$zip = Join-Path $packages 'FlowLog-Native-0.2.0-Portable.zip'
+$zip = Join-Path $packages 'FlowLog-Native-0.2.1-Portable.zip'
 Compress-Archive -LiteralPath $files -DestinationPath $zip -Force
 $assets = @(Get-ChildItem -LiteralPath $packages -File | Where-Object { $_.Extension -in '.exe','.zip' } | ForEach-Object {
   if ($_.Length -ge 20000000) { throw 'Package exceeds 20MB' }
   [ordered]@{ name=$_.Name; bytes=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
 })
-$report = [ordered]@{ version='0.2.0'; ui='Windows WPF + AvalonEdit; no WebView/Electron'; runtime='System .NET Framework 4.8 required; excluded from package size'; assets=$assets }
+$report = [ordered]@{ version='0.2.1'; ui='Windows WPF + AvalonEdit; no WebView/Electron'; runtime='System .NET Framework 4.8 required; excluded from package size'; assets=$assets }
 $report | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $packages 'native-package-report.json') -Encoding UTF8
 $report | ConvertTo-Json -Depth 5

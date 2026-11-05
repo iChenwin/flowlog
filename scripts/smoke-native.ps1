@@ -12,7 +12,7 @@ $install = Join-Path $fixture 'app'
 $registration = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\FlowLogNative'
 if ($Installed) {
   if (Test-Path -LiteralPath $registration) { throw 'An existing native install is registered; use a clean test account for installer smoke.' }
-  $setup = Join-Path $project 'native/packages/FlowLog-Native-0.2.0-Setup.exe'
+  $setup = Join-Path $project 'native/packages/FlowLog-Native-0.2.1-Setup.exe'
   $installer = Start-Process -FilePath $setup -ArgumentList @('/S', ('/D=' + $install)) -WindowStyle Hidden -PassThru -Wait
   if ($installer.ExitCode -ne 0) { throw 'Installer failed' }
   $exe = Join-Path $install 'FlowLog.Native.exe'

@@ -2,14 +2,14 @@ Unicode true
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 Name "FlowLog Native"
-OutFile "${PACKAGE_DIR}\FlowLog-Native-0.2.0-Setup.exe"
+OutFile "${PACKAGE_DIR}\FlowLog-Native-0.2.1-Setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\FlowLog Native"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
-VIProductVersion "0.2.0.0"
+VIProductVersion "0.2.1.0"
 VIAddVersionKey "ProductName" "FlowLog Native"
 VIAddVersionKey "FileDescription" "FlowLog Windows native installer"
-VIAddVersionKey "FileVersion" "0.2.0"
+VIAddVersionKey "FileVersion" "0.2.1"
 VIAddVersionKey "LegalCopyright" "MIT Copyright 2026 iChenwin"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "..\LICENSE"
@@ -40,7 +40,7 @@ Section "FlowLog Native"
   CreateDirectory "$SMPROGRAMS\FlowLog Native"
   CreateShortcut "$SMPROGRAMS\FlowLog Native\FlowLog Native.lnk" "$INSTDIR\FlowLog.Native.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FlowLogNative" "DisplayName" "FlowLog Native"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FlowLogNative" "DisplayVersion" "0.2.0"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FlowLogNative" "DisplayVersion" "0.2.1"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FlowLogNative" "Publisher" "iChenwin"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FlowLogNative" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FlowLogNative" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
